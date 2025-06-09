@@ -45,7 +45,7 @@ Bu proje, **Türkiye'deki Merkezi Hekim Randevu Sistemi (MHRS)** üzerinden beli
 ### 1️⃣ Programı İndirme
 
 1. Bu GitHub deposunun sağ tarafındaki **Releases (Sürümler)** sekmesine tıklayın.
-2. En güncel sürüm altında yer alan `ÇALIŞTIR.zip` dosyasını indirin.
+2. En güncel sürüm altında yer alan `MHRS-OtomatikRandevu.zip` dosyasını indirin.
 3. `.zip` dosyasını çıkartın.
 
 ### 2️⃣ Telegram Bildirimlerini Ayarlama
