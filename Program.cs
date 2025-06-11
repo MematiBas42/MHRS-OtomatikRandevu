@@ -7,6 +7,11 @@
 // DÜZELTME 4: CS0029 'void' to 'bool' hatası giderildi.
 // DÜZELTME 5: LGN2001 ve GNL2029 hata kodları için özel kullanıcı uyarıları eklendi.
 // DÜZELTME 6: CS1501 'WriteText' metodu için tekrar yükleme hatası giderildi.
+// YENİ DÜZELTME (10.06.2024): Randevu bulundu ekranındaki çift çıktı sorunu giderildi.
+// YENİ ÖZELLİK (10.06.2024): Güne özel saat filtresi ve "çok yakın" randevuları engelleme eklendi.
+// YENİ ÖZELLİK (11.06.2025): Gelişmiş, tarihe göre saat filtreleme mekanizması eklendi.
+// GÜNCELLEME (11.06.2025): Gelişmiş filtreye genel (varsayılan) kural desteği eklendi.
+// DERLEME DÜZELTMELERİ (11.06.2025): Logger.Warn hatası ve tüm nullable referans uyarıları giderildi.
 using MHRS_OtomatikRandevu.Models;
 using MHRS_OtomatikRandevu.Models.RequestModels;
 using MHRS_OtomatikRandevu.Models.ResponseModels;
@@ -24,6 +29,7 @@ using System;
 using System.IO;
 using System.Configuration; // app.config okumak için eklendi
 using System.Threading;
+using System.Globalization;
 
 namespace MHRS_OtomatikRandevu
 {
@@ -79,6 +85,7 @@ namespace MHRS_OtomatikRandevu
 
         static IClientService _client = null!;
         static INotificationService _notificationService = null!;
+        static int minimumMinutesToAppointment = 0; // Çok yakın randevuları engellemek için
 
         static List<int> GetMultipleSelections(List<GenericResponseModel>? options, string prompt, string entityName, bool allowFarketmez = true, string parentInfo = "")
         {
@@ -204,6 +211,39 @@ namespace MHRS_OtomatikRandevu
             var genericOptions = options?.Select(c => new GenericResponseModel { Value = c.Value, Text = c.Text }).ToList();
             return GetMultipleSelections(genericOptions, prompt, entityName, allowFarketmez, parentInfo);
         }
+        
+        static bool PassesDateBasedFilter(DateTime slotDateTime, Dictionary<DateTime, DateFilterRule> dateSpecificRules, DateFilterRule? globalRule)
+        {
+            var slotDate = slotDateTime.Date;
+            
+            if (dateSpecificRules.TryGetValue(slotDate, out var specificRule))
+            {
+                int slotHour = slotDateTime.Hour;
+                if (specificRule.Mode == FilterMode.Include)
+                {
+                    return specificRule.Hours.Contains(slotHour);
+                }
+                else 
+                {
+                    return !specificRule.Hours.Contains(slotHour);
+                }
+            }
+            else if (globalRule != null)
+            {
+                int slotHour = slotDateTime.Hour;
+                if (globalRule.Mode == FilterMode.Include)
+                {
+                    return globalRule.Hours.Contains(slotHour);
+                }
+                else 
+                {
+                    return !globalRule.Hours.Contains(slotHour);
+                }
+            }
+            
+            return true;
+        }
+
 
         static async Task Main(string[] args)
         {
@@ -215,6 +255,13 @@ namespace MHRS_OtomatikRandevu
             Logger.Info("================ UYGULAMA BAŞLATILDI ================");
             _client = new ClientService();
             _notificationService = new NotificationService();
+
+            try
+            {
+                minimumMinutesToAppointment = int.Parse(ConfigurationManager.AppSettings["MinimumMinutesToAppointment"] ?? "0");
+            }
+            catch { minimumMinutesToAppointment = 0; }
+
 
             Logger.WriteLineAndLog("MHRS Otomatik Randevu uygulaması başlatıldı.");
             
@@ -242,7 +289,7 @@ namespace MHRS_OtomatikRandevu
                 if (string.IsNullOrWhiteSpace(TC_NO) || string.IsNullOrWhiteSpace(SIFRE))
                 {
                     ConsoleUtil.WriteText("TC Kimlik Numarası ve Şifre boş olamaz.", 1500);
-                    TC_NO = null; SIFRE = null;
+                    TC_NO = null; SIFRE = null; 
                     Thread.Sleep(1500); continue;
                 }
 
@@ -250,10 +297,8 @@ namespace MHRS_OtomatikRandevu
                 var tokenData = await GetToken(_client);
                 if (tokenData == null || string.IsNullOrEmpty(tokenData.Token))
                 {
-                    // GetToken metodu GNL2029 gibi kritik hatalarda programı zaten sonlandırır.
-                    // Diğer durumlarda (LGN2001, hatalı şifre vb.) kullanıcıdan bilgileri yeniden isteriz.
                     Logger.Error("Giriş başarısız oldu. Bilgiler yeniden isteniyor.");
-                    TC_NO = null; SIFRE = null; // Force re-entry of credentials
+                    TC_NO = null; SIFRE = null; 
                     Thread.Sleep(3000);
                     continue;
                 }
@@ -284,17 +329,12 @@ namespace MHRS_OtomatikRandevu
                     Logger.Error($"İl listesi alınamadı (Deneme: {provinceRetryCount}). Token geçersiz olabilir. Token yenilenip tekrar denenecek.");
                     ConsoleUtil.WriteText("Token geçersiz, yenileniyor...", 2000);
 
-                    // YENİ KOD: İsteğiniz üzerine yapılan değişiklik.
-                    // Hatalı/eski çerezleri temizlemek için ClientService'i yeniden oluşturuyoruz.
-                    // Bu, randevu arama döngüsündeki başarılı token yenileme mantığıyla aynıdır.
                     _client = new ClientService();
                     Logger.Info("ClientService (HttpClient ve Çerezler) sıfırlandı.");
-                    // --- YENİ KOD SONU ---
 
                     var tokenData = await GetToken(_client, forceRefresh: true);
                     if (tokenData == null || string.IsNullOrEmpty(tokenData.Token))
                     {
-                        // Otomatik yenileme başarısız olursa (örn: şifre yanlış), son çare olarak kullanıcıdan tekrar giriş istemek mantıklıdır.
                         Logger.Error("Otomatik token yenileme başarısız. Giriş ekranına yönlendiriliyor.");
                         ConsoleUtil.WriteText("Token otomatik olarak yenilenemedi, lütfen bilgilerinizi yeniden girin.", 3000);
                         JWT_TOKEN = null;
@@ -308,7 +348,7 @@ namespace MHRS_OtomatikRandevu
                     TOKEN_END_DATE = tokenData.Expiration;
                     _client.AddOrUpdateAuthorizationHeader(JWT_TOKEN);
                     Logger.Info("Token başarıyla yenilendi. İl listesi tekrar isteniyor.");
-                    provinceListResponse = null; // Döngünün devam etmesi için null'a çekiyoruz.
+                    provinceListResponse = null; 
                 }
             }
 
@@ -316,7 +356,7 @@ namespace MHRS_OtomatikRandevu
             {
                 Logger.Error("Tüm denemelere rağmen il listesi alınamadı. Program sonlandırılıyor.");
                 ConsoleUtil.WriteText("Kritik bir hata oluştu, il listesi alınamıyor. Program kapatılıyor.", 3000);
-                HandleExit(true); // Otomatik olarak token'ı sil ve çık
+                HandleExit(true); 
                 return;
             }
 
@@ -647,75 +687,69 @@ namespace MHRS_OtomatikRandevu
             } while (true);
             #endregion
 
-            #region Saat Seçim Bölümü
-            List<int> includedHours = new List<int>();
-            List<int> excludedHours = new List<int>();
-            bool validHourInput = false;
-            do
+            #region Gelişmiş Tarih ve Saat Filtresi Bölümü
+            var dateBasedFilters = new Dictionary<DateTime, DateFilterRule>();
+            DateFilterRule? globalFilter = null; 
+            Console.Clear();
+            Console.WriteLine("--- Gelişmiş Tarih ve Saat Filtresi ---");
+            Console.WriteLine("Filtre girmek istemiyorsanız bu adımı boş geçebilirsiniz (ENTER).");
+            Console.WriteLine("Format: GG-AA-YYYY, saat1, saat2... ; -saat3, -saat4... ; ...");
+            Console.WriteLine("  - Tarihe Özel Kural: 24-06-2025, 9, 10 (Sadece saat 9 ve 10'u al)");
+            Console.WriteLine("  - Tarihe Özel Kural: 25-06-2025, -8, -15 (Saat 8 ve 15'i alma)");
+            Console.WriteLine("  - Genel Kural (Tarih belirtilmezse): -8, -9 (Diğer tüm günler için 8 ve 9'u alma)");
+
+            string? filterInput = Logger.ReadLineAndLog("\nLütfen filtre kurallarını giriniz: ");
+
+            if (!string.IsNullOrWhiteSpace(filterInput))
             {
-                Console.Clear();
-                ConsoleUtil.WriteText("Saat filtresi girmek istemiyorsanız '0' girerek geçebilirsiniz.", 0);
-                string? hourInput = Logger.ReadLineAndLog("İstediğiniz saatleri girin (örn: 9,14,15).\nİSTEMEDİĞİNİZ saatleri girin (örn: -8,-9,-17).\n'FARKETMEZ' için 0 girin: ");
-                if (hourInput == null) { HandleExit(false); return; }
-
-                includedHours.Clear();
-                excludedHours.Clear();
-
-                if (hourInput.Trim() == "0")
+                var allRuleStrings = filterInput.Split(';');
+                foreach (var ruleText in allRuleStrings)
                 {
-                    validHourInput = true;
-                    break;
-                }
+                    if (string.IsNullOrWhiteSpace(ruleText)) continue;
 
-                var parts = hourInput.Split(',');
-                bool hasPositive = false;
-                bool hasNegative = false;
-                bool parseError = false;
-
-                foreach (var part in parts)
-                {
-                    if (int.TryParse(part.Trim(), out int hour))
+                    var parts = ruleText.Split(',').Select(p => p.Trim()).ToList();
+                    if (!parts.Any()) continue;
+                    
+                    if (DateTime.TryParseExact(parts[0], "dd-MM-yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out var ruleDate))
                     {
-                        if (hour > 0)
+                        var rule = new DateFilterRule();
+                        bool modeSet = false;
+
+                        for (int i = 1; i < parts.Count; i++)
                         {
-                            includedHours.Add(hour);
-                            hasPositive = true;
+                            if (int.TryParse(parts[i], out int hour))
+                            {
+                                var currentMode = hour > 0 ? FilterMode.Include : FilterMode.Exclude;
+                                if (!modeSet) { rule.Mode = currentMode; modeSet = true; }
+                                else if (rule.Mode != currentMode) { Logger.Warn($"Kural '{ruleText}' içinde karışık mod kullanılamaz. Atlanıyor."); rule.Hours.Clear(); break; }
+                                rule.Hours.Add(Math.Abs(hour));
+                            }
                         }
-                        else if (hour < 0)
-                        {
-                            excludedHours.Add(Math.Abs(hour));
-                            hasNegative = true;
-                        }
-                        else // hour == 0
-                        {
-                            ConsoleUtil.WriteText("'0' (FARKETMEZ) diğer saatlerle birlikte kullanılamaz.", 2000);
-                            parseError = true;
-                            Thread.Sleep(2000);
-                            break;
-                        }
+                        if (rule.Hours.Any()) dateBasedFilters[ruleDate.Date] = rule;
                     }
                     else
                     {
-                        ConsoleUtil.WriteText($"'{part}' geçerli bir sayı değil.", 2000);
-                        parseError = true;
-                        Thread.Sleep(2000);
-                        break;
+                        if (globalFilter != null) { Logger.Warn("Birden fazla genel kural tanımlandı. Sadece ilki kullanılacak."); continue; }
+                        
+                        var rule = new DateFilterRule();
+                        bool modeSet = false;
+
+                        foreach(var part in parts)
+                        {
+                             if (int.TryParse(part, out int hour))
+                            {
+                                var currentMode = hour > 0 ? FilterMode.Include : FilterMode.Exclude;
+                                if (!modeSet) { rule.Mode = currentMode; modeSet = true; }
+                                else if (rule.Mode != currentMode) { Logger.Warn($"Genel kural '{ruleText}' içinde karışık mod kullanılamaz. Atlanıyor."); rule.Hours.Clear(); break; }
+                                rule.Hours.Add(Math.Abs(hour));
+                            }
+                        }
+                        if (rule.Hours.Any()) globalFilter = rule;
                     }
                 }
-
-                if (parseError) continue;
-
-                if (hasPositive && hasNegative)
-                {
-                    ConsoleUtil.WriteText("Aynı anda hem dahil edilecek (pozitif) hem de hariç tutulacak (negatif) saatler giremezsiniz.", 2500);
-                    Thread.Sleep(2500);
-                }
-                else
-                {
-                    validHourInput = true;
-                }
-
-            } while (!validHourInput);
+                Console.WriteLine("Filtreler başarıyla işlendi. Arama başlıyor...");
+                Thread.Sleep(2000);
+            }
             #endregion
 
             #region Randevu Alım Bölümü
@@ -800,38 +834,28 @@ namespace MHRS_OtomatikRandevu
                         bool placeMatch = targetPlaceIdsInGroup.Contains(-1) || targetPlaceIdsInGroup.Contains((int)slot.MuayeneYeriId);
                         bool doctorMatch = targetDoctorIdsInGroup.Contains(-1) || targetDoctorIdsInGroup.Contains(slot.MhrsHekimId);
 
-                        // YENİ EKLENEN SAAT FİLTRESİ
-                        bool hourMatch;
-                        try
+                        if (string.IsNullOrEmpty(slot.BaslangicZamani)) continue; // Null kontrolü
+                        DateTime slotDateTime = DateTime.Parse(slot.BaslangicZamani);
+                        
+                        bool isHourMatch = PassesDateBasedFilter(slotDateTime, dateBasedFilters, globalFilter);
+                        
+                        bool notTooSoon = true;
+                        if (minimumMinutesToAppointment > 0 && slotDateTime.Date == DateTime.Today)
                         {
-                            int slotHour = DateTime.Parse(slot.BaslangicZamani).Hour;
-                            if (includedHours.Any())
+                            if ((slotDateTime - DateTime.Now).TotalMinutes < minimumMinutesToAppointment)
                             {
-                                hourMatch = includedHours.Contains(slotHour);
-                            }
-                            else if (excludedHours.Any())
-                            {
-                                hourMatch = !excludedHours.Contains(slotHour);
-                            }
-                            else // '0' girildi, saat filtresi yok
-                            {
-                                hourMatch = true;
+                                notTooSoon = false;
                             }
                         }
-                        catch (Exception ex)
-                        {
-                            Logger.Error($"Slot başlangıç zamanı ('{slot.BaslangicZamani}') ayrıştırılamadı. Bu slot atlanıyor.", ex);
-                            continue; // Hatalı tarih formatı varsa bu slotu atla
-                        }
-                        // SAAT FİLTRESİ SONU
-
-                        if (placeMatch && doctorMatch && hourMatch)
+                        
+                        if (placeMatch && doctorMatch && isHourMatch && notTooSoon)
                         {
                             locallyFilteredSlots.Add(slot);
                         }
                     }
+
                     Logger.WriteLineAndLog($"   Yerel filtreleme sonrası {locallyFilteredSlots.Count} uygun slot bulundu.");
-                    locallyFilteredSlots = locallyFilteredSlots.OrderBy(s => DateTime.Parse(s.BaslangicZamani ?? DateTime.MaxValue.ToString())).ToList();
+                    locallyFilteredSlots = locallyFilteredSlots.OrderBy(s => DateTime.Parse(s.BaslangicZamani!)).ToList();
 
                     foreach (SubSlot finalSlotToBook in locallyFilteredSlots)
                     {
@@ -840,6 +864,12 @@ namespace MHRS_OtomatikRandevu
                         string kurumAdi = finalSlotToBook.KurumAdi ?? repCombo.HospitalText;
 
                         Logger.WriteLineAndLog($"   Randevu deneniyor: {finalSlotToBook.BaslangicZamani} Dr:{doktorAdi} Yer:{yerAdi} Kurum:{kurumAdi}");
+                        
+                        if(finalSlotToBook.BaslangicZamani == null || finalSlotToBook.BitisZamani == null)
+                        {
+                            Logger.Error($"Slot ID {finalSlotToBook.Id} için başlangıç veya bitiş zamanı null. Atlanıyor.");
+                            continue;
+                        }
 
                         var appReq = new AppointmentRequestModel
                         {
@@ -1090,7 +1120,7 @@ namespace MHRS_OtomatikRandevu
                 var rnd5015Warning = detailedResp.warnings.First(w => w.kodu == "RND5015");
                 Logger.WriteLineAndLog($"\nUYARI (RND5015): {rnd5015Warning.mesaj}");
 
-                DateTime yeniRandevuTarihi = DateTime.Parse(alinanSlotDetaylari.BaslangicZamani ?? string.Empty);
+                DateTime yeniRandevuTarihi = DateTime.Parse(alinanSlotDetaylari.BaslangicZamani!);
                 DateTime eskiRandevuTarihi = DateTime.MinValue;
                 bool shouldAttemptCancelAndRebook = false;
 
@@ -1198,31 +1228,36 @@ namespace MHRS_OtomatikRandevu
 ========================================================================================================================";
             Console.WriteLine(asciiArt);
             
-            Logger.WriteLineAndLog(successMessage);
-            Console.WriteLine($"\n=============== {successMessage} ===============\n");
+            string headerMessage = $"\n=============== {successMessage} ===============\n";
+            Console.WriteLine(headerMessage); 
+            Logger.Info(headerMessage);       
 
-            string detay = $"Tarih      : {DateTime.Parse(alinanSlotDetaylari.BaslangicZamani ?? string.Empty):dd MMMM yyyy, dddd HH:mm}\n" +
+            string detay = $"Tarih      : {DateTime.Parse(alinanSlotDetaylari.BaslangicZamani!):dd MMMM yyyy, dddd HH:mm}\n" +
                            $"Hastane    : {alinanSlotDetaylari.KurumAdi ?? aramaKriterleri.HospitalText}\n" +
                            $"Klinik     : {aramaKriterleri.ClinicText}\n" +
                            $"Muayene Yeri: {alinanSlotDetaylari.MuayeneYeriAdi ?? "Belirtilmedi"}\n" +
                            $"Doktor     : {alinanSlotDetaylari.HekimAdi ?? "Belirtilmedi"}";
-            
-            Logger.WriteLineAndLog("\n--- RANDEVU DETAYLARI ---\n" + detay);
+
+            string detailsHeader = "\n--- RANDEVU DETAYLARI ---";
+            Console.WriteLine(detailsHeader);
             Console.WriteLine(detay);
             Console.WriteLine("\n========================================================\n");
             
+            Logger.Info(detailsHeader + "\n" + detay);
+            
             try
             {
-                Logger.WriteLineAndLog("Telegram bildirimi gönderiliyor...");
+                Logger.Info("Telegram bildirimi gönderiliyor...");
                 string notificationMessage = $"✅ RANDEVU BULUNDU! ✅\n\n" +
-                                             $"Tarih: {DateTime.Parse(alinanSlotDetaylari.BaslangicZamani ?? string.Empty):dd MMMM yyyy, dddd HH:mm}\n" +
+                                             $"Tarih: {DateTime.Parse(alinanSlotDetaylari.BaslangicZamani!):dd MMMM yyyy, dddd HH:mm}\n" +
                                              $"Hastane: {alinanSlotDetaylari.KurumAdi ?? aramaKriterleri.HospitalText}\n" +
                                              $"Klinik: {aramaKriterleri.ClinicText}\n" +
                                              $"Muayene Yeri: {alinanSlotDetaylari.MuayeneYeriAdi ?? "Belirtilmedi"}\n" +
                                              $"Doktor: {alinanSlotDetaylari.HekimAdi ?? "Belirtilmedi"}";
                 
+                // DÜZELTME: await eklendi.
                 await _notificationService.SendNotification(notificationMessage);
-
+                //Console.WriteLine("Telegram bildirimi gönderildi.");
             }
             catch (Exception ex)
             {
@@ -1234,18 +1269,25 @@ namespace MHRS_OtomatikRandevu
             {
                 if (bool.TryParse(ConfigurationManager.AppSettings["PlayAlarmOnFound"], out bool playAlarm) && playAlarm)
                 {
-                    Logger.Info("PlayAlarmOnFound=true. Alarm çalınıyor...");
-                    Task.Run(() => {
-                        try
-                        {
-                            for (int i = 0; i < 30; i++)
+                    // DÜZELTME: Platform kontrolü eklendi ve Task.Run beklenecek.
+                    if (OperatingSystem.IsWindows())
+                    {
+                        Logger.Info("PlayAlarmOnFound=true. Alarm çalınıyor...");
+                        await Task.Run(() => {
+                            try
                             {
-                                Console.Beep(800, 500);
-                                Thread.Sleep(500);
-                            }
-                        } catch (Exception) {
-                        }
-                    });
+                                for (int i = 0; i < 30; i++)
+                                {
+                                    Console.Beep(800, 500);
+                                    Thread.Sleep(500);
+                                }
+                            } catch (Exception) {}
+                        });
+                    }
+                    else
+                    {
+                        Logger.Info("PlayAlarmOnFound=true, ancak işletim sistemi Windows olmadığı için alarm çalınamıyor.");
+                    }
                 }
             } catch (Exception ex) {
                 Logger.Error("app.config okunurken veya alarm çalınırken hata.", ex);
@@ -1256,7 +1298,6 @@ namespace MHRS_OtomatikRandevu
             Console.WriteLine("\nÇıkmak için ENTER tuşuna basın...");
             while (Console.ReadKey(true).Key != ConsoleKey.Enter) 
             {
-                // Döngü, Enter'a basılana kadar burada bekler.
             }
             Environment.Exit(0);
         }

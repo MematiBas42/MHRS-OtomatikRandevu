@@ -17,15 +17,14 @@ namespace MHRS_OtomatikRandevu.Models.RequestModels
         public long MuayeneYeriId { get; set; }
 
         [JsonPropertyName("baslangicZamani")]
-        public string BaslangicZamani { get; set; }
+        public string BaslangicZamani { get; set; } = default!; // DÜZELTME
 
         [JsonPropertyName("bitisZamani")]
-        public string BitisZamani { get; set; }
+        public string BitisZamani { get; set; } = default!; // DÜZELTME
 
         [JsonPropertyName("randevuNotu")]
         public string? RandevuNotu { get; set; } = "";
 
-        // --- EKLENEN YENİ ÖZELLİKLER ---
         [JsonPropertyName("ekSureDurumu")]
         public int EkSureDurumu { get; set; } = 0;
 

@@ -1,9 +1,9 @@
-﻿#nullable enable
+#nullable enable
 using MHRS_OtomatikRandevu.Models;
 using Microsoft.IdentityModel.Tokens;
 using System.Text.Json;
-using IdentityModel; // Ensure this is present
-using System; // Other necessary namespaces
+using IdentityModel;
+using System;
 using IdentityModel.Client;
 
 namespace MHRS_OtomatikRandevu.Utils
@@ -14,13 +14,16 @@ namespace MHRS_OtomatikRandevu.Utils
         {
             try
             {
-                if (string.IsNullOrWhiteSpace(token))
-                    return DateTime.MinValue;
-                if (!token.Contains("."))
+                if (string.IsNullOrWhiteSpace(token) || !token.Contains("."))
                     return DateTime.MinValue;
 
                 string[] parts = token.Split('.');
                 var payload = JsonSerializer.Deserialize<JwtTokenModel>(Base64UrlEncoder.Decode(parts[1]));
+
+                // DÜZELTME: payload null olabilir.
+                if (payload == null)
+                    return DateTime.MinValue;
+
                 DateTimeOffset dateTimeOffset = DateTimeOffset.FromUnixTimeSeconds(payload.ExpirationUnix);
                 return dateTimeOffset.LocalDateTime;
             }
