@@ -24,7 +24,6 @@ namespace MHRS_OtomatikRandevu.Utils
     public static class Logger
     {
         private static readonly bool _isLoggingEnabled;
-        // Başlangıçta genel bir log dosyası adı kullanılır, Initialize ile TCKN'ye özel hale getirilir.
         private static string _logFilePath = Path.Combine(AppContext.BaseDirectory, "mhrs_automator_log_generic.txt");
         private static readonly object _lock = new object();
 
@@ -39,7 +38,6 @@ namespace MHRS_OtomatikRandevu.Utils
         {
             try
             {
-                // App.config dosyasından loglama ayarını okur.
                 string? isLoggingValue = ConfigurationManager.AppSettings["isLogging"];
                 _isLoggingEnabled = isLoggingValue?.ToLower() == "true";
             }
@@ -54,13 +52,11 @@ namespace MHRS_OtomatikRandevu.Utils
         {
             if (!_isLoggingEnabled || string.IsNullOrWhiteSpace(tcKimlikNo)) return;
             
-            // Log dosyasının adını T.C. kimlik numarasına özel hale getirir.
             string oldLogPath = _logFilePath;
             _logFilePath = Path.Combine(AppContext.BaseDirectory, $"mhrs_automator_log_{tcKimlikNo}.txt");
 
             lock (_lock)
             {
-                // Eğer başlangıçta generic dosyaya log yazıldıysa, içeriğini TCKN'ye özel dosyaya taşı.
                 if (File.Exists(oldLogPath) && oldLogPath != _logFilePath)
                 {
                     string initialLogs = File.ReadAllText(oldLogPath);
@@ -81,7 +77,6 @@ namespace MHRS_OtomatikRandevu.Utils
 
             try
             {
-                // Dosyaya yazma işlemini thread-safe hale getirmek için kilitle.
                 lock (_lock)
                 {
                     using (StreamWriter sw = File.AppendText(_logFilePath))
@@ -97,6 +92,9 @@ namespace MHRS_OtomatikRandevu.Utils
         }
 
         public static void Info(string message) => Log(LogLevel.INFO, message);
+        
+        // YENİ EKLENDİ: Eksik olan Warn metodu
+        public static void Warn(string message) => Log(LogLevel.WARN, message);
 
         public static void Error(string message, Exception? ex = null)
         {

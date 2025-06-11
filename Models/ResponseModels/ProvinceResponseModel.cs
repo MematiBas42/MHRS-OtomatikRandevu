@@ -1,4 +1,4 @@
-﻿using System.Text.Json.Serialization;
+using System.Text.Json.Serialization;
 
 namespace MHRS_OtomatikRandevu.Models.ResponseModels
 {
@@ -8,9 +8,9 @@ namespace MHRS_OtomatikRandevu.Models.ResponseModels
         public int Value { get; set; }
 
         [JsonPropertyName("text")]
-        public string Text { get; set; }
+        public string Text { get; set; } = default!; // DÜZELTME
 
         [JsonPropertyName("children")]
-        public List<ProvinceResponseModel> Children { get; set; }
+        public List<ProvinceResponseModel> Children { get; set; } = new(); // DÜZELTME
     }
 }
