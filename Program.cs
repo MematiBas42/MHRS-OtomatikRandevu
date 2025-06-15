@@ -78,6 +78,7 @@ namespace MHRS_OtomatikRandevu
 
     public class Program
     {
+    	static string version = "v1.0.2";
         static string? TC_NO;
         static string? SIFRE;
 
@@ -253,7 +254,7 @@ namespace MHRS_OtomatikRandevu
                 HandleExit(false);
             };
 
-            Logger.Info("================ UYGULAMA BAŞLATILDI ================");
+            Logger.Info($"================ UYGULAMA BAŞLATILDI (Sürüm: {version}) ================");
             _client = new ClientService();
             _notificationService = new NotificationService();
 
@@ -274,7 +275,7 @@ namespace MHRS_OtomatikRandevu
                 Console.Clear();
                 if (string.IsNullOrEmpty(TC_NO) || string.IsNullOrEmpty(SIFRE))
                 {
-                    Console.WriteLine("MHRS Otomatik Randevu Sistemine Hoşgeldiniz.\nLütfen giriş yapmak için bilgilerinizi giriniz.");
+                    Console.WriteLine("MHRS Otomatik Randevu Sistemine Hoşgeldiniz. (" + version + ")\nLütfen giriş yapmak için bilgilerinizi giriniz.");
                     TC_NO = Logger.ReadLineAndLog("TC: ");
                     if (TC_NO == null) { HandleExit(false); return; }
 
@@ -1239,25 +1240,25 @@ namespace MHRS_OtomatikRandevu
             Console.Clear();
 
             string asciiArt = @"
-========================================================================================================================
-//  ooooooooo.         .o.       ooooo      ooo oooooooooo.   oooooooooooo oooooo     oooo ooooo     ooo              ||
-//  `888   `Y88.      .888.      `888b.     `8  `888    `Y8b  `888      `8  `888.     .8   `888      `8               ||
-//   888   .d88      .8 888.      8 `88b.    8   888      888  888           `888.   .8     888       8               ||
-//   888ooo88P      .8  `888.     8   `88b.  8   888      888  888oooo8       `888. .8      888       8               ||
-//   888`88b.      .88ooo8888.    8     `88b.8   888      888  888             `888.8       888       8               ||
-//   888  `88b.   .8      `888.   8       `888   888     d88   888       o      `888        `88.    .8                ||
-//  o888o  o888o o88o     o8888o o8o        `8  o888bood8P    o888ooooood8       `8           `YbodP                  ||
-//                 oooooooooo.  ooooo     ooo ooooo        ooooo     ooo ooooo      ooo oooooooooo.   ooooo     ooo   ||
-//                 `888    `Y8b `888      `8  `888         `888      `8  `888b.     `8  `888    `Y8b  `888      `8    ||
-//                  888     888  888       8   888          888       8   8 `88b.    8   888      888  888       8    ||
-//                  888oooo888   888       8   888          888       8   8   `88b.  8   888      888  888       8    ||
-//                  888    `88b  888       8   888          888       8   8     `88b.8   888      888  888       8    ||
-//                  888    .88P  `88.    .8    888       o  `88.    .8    8       `888   888     d88   `88.    .8     ||
-//                 o888bood8P      `YbodP     o888ooooood8    `YbodP     o8o        `8  o888bood8P       `YbodP       ||
-//                                                                                                                    ||
-//                                MematiBas42 acil şifalar diler...                                                   ||
-//                                                                                                                    ||
-========================================================================================================================";
+=======================================================================================================
+//ooooooooo.         .o.       ooooo      ooo oooooooooo.   oooooooooooo oooooo     oooo ooooo     ooo||
+//`888   `Y88.      .888.      `888b.     `8  `888    `Y8b  `888      `8  `888.     .8   `888      `8 ||
+// 888   .d88      .8 888.      8 `88b.    8   888      888  888           `888.   .8     888       8 ||
+// 888ooo88P      .8  `888.     8   `88b.  8   888      888  888oooo8       `888. .8      888       8 ||
+// 888`88b.      .88ooo8888.    8     `88b.8   888      888  888             `888.8       888       8 ||
+// 888  `88b.   .8      `888.   8       `888   888     d88   888       o      `888        `88.    .8  ||
+//o888o  o888o o88o     o8888o o8o        `8  o888bood8P    o888ooooood8       `8           `YbodP    ||
+//    oooooooooo.  ooooo     ooo ooooo        ooooo     ooo ooooo      ooo oooooooooo.   ooooo     ooo||
+//    `888    `Y8b `888      `8  `888         `888      `8  `888b.     `8  `888    `Y8b  `888      `8 ||
+//     888     888  888       8   888          888       8   8 `88b.    8   888      888  888       8 ||
+//     888oooo888   888       8   888          888       8   8   `88b.  8   888      888  888       8 ||
+//     888    `88b  888       8   888          888       8   8     `88b.8   888      888  888       8 ||
+//     888    .88P  `88.    .8    888       o  `88.    .8    8       `888   888     d88   `88.    .8  ||
+//    o888bood8P      `YbodP     o888ooooood8    `YbodP     o8o        `8  o888bood8P       `YbodP    ||
+//                                                                                                    ||
+//                              MematiBas42 acil şifalar diler...                                     ||
+//                              telegram: @cephanelikchat                                             ||
+=======================================================================================================";
             Console.WriteLine(asciiArt);
             
             Logger.WriteLineAndLog(successMessage);
