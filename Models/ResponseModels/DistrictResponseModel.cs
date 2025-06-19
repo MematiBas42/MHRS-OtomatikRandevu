@@ -1,13 +1,13 @@
-﻿using System.Text.Json.Serialization;
+using System.Text.Json.Serialization;
 
 namespace MHRS_OtomatikRandevu.Models.ResponseModels
 {
     public class DistrictResponseModel
     {
         [JsonPropertyName("value")]
-        public string Value { get; set; }
+        public string Value { get; set; } = default!; // DÜZELTME
 
         [JsonPropertyName("text")]
-        public string Text { get; set; }
+        public string Text { get; set; } = default!; // DÜZELTME
     }
 }

@@ -1,0 +1,64 @@
+# Workflow'un adı
+name: Windows Build ve Release Oluşturma
+
+# Tetikleyici: CI dalına bir push yapıldığında çalışır
+on:
+  push:
+    branches:
+      - CI
+
+# İşler (Jobs)
+jobs:
+  build-and-release-windows:
+    # Çalışma ortamı: En güncel Ubuntu (Linux runner'lar .NET SDK ile Windows çıktısı üretebilir)
+    runs-on: ubuntu-latest
+    
+    # İzinler: GitHub release'i oluşturabilmek için 'contents' izni gerekir
+    permissions:
+      contents: write
+
+    # Adımlar
+    steps:
+      # 1. Depoyu Klonla (Checkout)
+      - name: Depoyu Klonla
+        uses: actions/checkout@v4
+
+      # 2. .NET 8 SDK Kurulumu
+      # Projeyi derlemek için gerekli olan .NET SDK'sını kurar
+      - name: .NET SDK Kurulumu
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+          
+      # 3. Bağımlılıkları Yükle (Restore)
+      - name: Bağımlılıkları Yükle
+        run: dotnet restore
+
+      # 4. Windows için Publish Et
+      # Sizin belirttiğiniz komutu kullanarak Windows için tek dosya (.exe) oluşturur
+      - name: Windows için Publish Et
+        run: dotnet publish -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true -o ./publish
+
+      # 5. Yayınlanan Dosyaları ZIP Arşivine Ekle
+      # Publish klasöründeki .exe ve diğer dosyaları release için sıkıştırır
+      - name: Dosyaları ZIP Arşivine Ekle
+        run: zip -j MHRS-OtomatikRandevu-win-x64.zip ./publish/*
+
+      # 6. GitHub Release Oluştur ve Asset Yükle
+      # Yeni bir "Pre-release" oluşturur ve zip dosyasını oraya yükler
+      - name: GitHub Release Oluştur
+        uses: softprops/action-gh-release@v2
+        with:
+          # Her çalıştığında benzersiz bir tag oluşturur (örn: ci-build-win-15)
+          tag_name: ci-build-win-${{ github.run_number }}
+          # Release başlığı (örn: Otomatik CI Sürümü (Windows) #15)
+          name: Otomatik CI Sürümü (Windows) #${{ github.run_number }}
+          body: |
+            Bu sürüm, CI dalına gönderilen son değişiklikler ile otomatik olarak oluşturulmuştur.
+            
+            **Platform:** Windows (win-x64)
+            **Tip:** Tek dosya, kendi içinde .NET Runtime içerir.
+          # Yüklenecek dosyalar
+          files: MHRS-OtomatikRandevu-win-x64.zip
+          # Bunun bir ön sürüm (pre-release) olduğunu belirtir
+          prerelease: true

@@ -7,6 +7,12 @@
 // DÜZELTME 4: CS0029 'void' to 'bool' hatası giderildi.
 // DÜZELTME 5: LGN2001 ve GNL2029 hata kodları için özel kullanıcı uyarıları eklendi.
 // DÜZELTME 6: CS1501 'WriteText' metodu için tekrar yükleme hatası giderildi.
+// YENİ DÜZELTME (10.06.2024): Randevu bulundu ekranındaki çift çıktı sorunu giderildi.
+// YENİ ÖZELLİK (10.06.2024): Güne özel saat filtresi ve "çok yakın" randevuları engelleme eklendi.
+// YENİ ÖZELLİK (11.06.2025): Gelişmiş, tarihe göre saat filtreleme mekanizması eklendi.
+// GÜNCELLEME (11.06.2025): Gelişmiş filtreye genel (varsayılan) kural desteği eklendi.
+// DERLEME DÜZELTMELERİ (11.06.2025): Logger.Warn hatası ve tüm nullable referans uyarıları giderildi.
+// LOG ANALİZİ DÜZELTMELERİ (12.06.2025): LGN2000 oturum hatası ve "CancelAndRebook" akışındaki mantık hatası düzeltildi.
 using MHRS_OtomatikRandevu.Models;
 using MHRS_OtomatikRandevu.Models.RequestModels;
 using MHRS_OtomatikRandevu.Models.ResponseModels;
@@ -24,6 +30,7 @@ using System;
 using System.IO;
 using System.Configuration; // app.config okumak için eklendi
 using System.Threading;
+using System.Globalization;
 
 namespace MHRS_OtomatikRandevu
 {
@@ -71,6 +78,7 @@ namespace MHRS_OtomatikRandevu
 
     public class Program
     {
+    	static string version = "v1.0.2";
         static string? TC_NO;
         static string? SIFRE;
 
@@ -79,6 +87,7 @@ namespace MHRS_OtomatikRandevu
 
         static IClientService _client = null!;
         static INotificationService _notificationService = null!;
+        static int minimumMinutesToAppointment = 0; // Çok yakın randevuları engellemek için
 
         static List<int> GetMultipleSelections(List<GenericResponseModel>? options, string prompt, string entityName, bool allowFarketmez = true, string parentInfo = "")
         {
@@ -204,6 +213,39 @@ namespace MHRS_OtomatikRandevu
             var genericOptions = options?.Select(c => new GenericResponseModel { Value = c.Value, Text = c.Text }).ToList();
             return GetMultipleSelections(genericOptions, prompt, entityName, allowFarketmez, parentInfo);
         }
+        
+        static bool PassesDateBasedFilter(DateTime slotDateTime, Dictionary<DateTime, DateFilterRule> dateSpecificRules, DateFilterRule? globalRule)
+        {
+            var slotDate = slotDateTime.Date;
+            
+            if (dateSpecificRules.TryGetValue(slotDate, out var specificRule))
+            {
+                int slotHour = slotDateTime.Hour;
+                if (specificRule.Mode == FilterMode.Include)
+                {
+                    return specificRule.Hours.Contains(slotHour);
+                }
+                else 
+                {
+                    return !specificRule.Hours.Contains(slotHour);
+                }
+            }
+            else if (globalRule != null)
+            {
+                int slotHour = slotDateTime.Hour;
+                if (globalRule.Mode == FilterMode.Include)
+                {
+                    return globalRule.Hours.Contains(slotHour);
+                }
+                else 
+                {
+                    return !globalRule.Hours.Contains(slotHour);
+                }
+            }
+            
+            return true;
+        }
+
 
         static async Task Main(string[] args)
         {
@@ -212,9 +254,16 @@ namespace MHRS_OtomatikRandevu
                 HandleExit(false);
             };
 
-            Logger.Info("================ UYGULAMA BAŞLATILDI ================");
+            Logger.Info($"================ UYGULAMA BAŞLATILDI (Sürüm: {version}) ================");
             _client = new ClientService();
             _notificationService = new NotificationService();
+
+            try
+            {
+                minimumMinutesToAppointment = int.Parse(ConfigurationManager.AppSettings["MinimumMinutesToAppointment"] ?? "0");
+            }
+            catch { minimumMinutesToAppointment = 0; }
+
 
             Logger.WriteLineAndLog("MHRS Otomatik Randevu uygulaması başlatıldı.");
             
@@ -226,7 +275,7 @@ namespace MHRS_OtomatikRandevu
                 Console.Clear();
                 if (string.IsNullOrEmpty(TC_NO) || string.IsNullOrEmpty(SIFRE))
                 {
-                    Console.WriteLine("MHRS Otomatik Randevu Sistemine Hoşgeldiniz.\nLütfen giriş yapmak için bilgilerinizi giriniz.");
+                    Console.WriteLine("MHRS Otomatik Randevu Sistemine Hoşgeldiniz. (" + version + ")\nLütfen giriş yapmak için bilgilerinizi giriniz.");
                     TC_NO = Logger.ReadLineAndLog("TC: ");
                     if (TC_NO == null) { HandleExit(false); return; }
 
@@ -242,7 +291,7 @@ namespace MHRS_OtomatikRandevu
                 if (string.IsNullOrWhiteSpace(TC_NO) || string.IsNullOrWhiteSpace(SIFRE))
                 {
                     ConsoleUtil.WriteText("TC Kimlik Numarası ve Şifre boş olamaz.", 1500);
-                    TC_NO = null; SIFRE = null;
+                    TC_NO = null; SIFRE = null; 
                     Thread.Sleep(1500); continue;
                 }
 
@@ -250,10 +299,8 @@ namespace MHRS_OtomatikRandevu
                 var tokenData = await GetToken(_client);
                 if (tokenData == null || string.IsNullOrEmpty(tokenData.Token))
                 {
-                    // GetToken metodu GNL2029 gibi kritik hatalarda programı zaten sonlandırır.
-                    // Diğer durumlarda (LGN2001, hatalı şifre vb.) kullanıcıdan bilgileri yeniden isteriz.
                     Logger.Error("Giriş başarısız oldu. Bilgiler yeniden isteniyor.");
-                    TC_NO = null; SIFRE = null; // Force re-entry of credentials
+                    TC_NO = null; SIFRE = null; 
                     Thread.Sleep(3000);
                     continue;
                 }
@@ -284,17 +331,12 @@ namespace MHRS_OtomatikRandevu
                     Logger.Error($"İl listesi alınamadı (Deneme: {provinceRetryCount}). Token geçersiz olabilir. Token yenilenip tekrar denenecek.");
                     ConsoleUtil.WriteText("Token geçersiz, yenileniyor...", 2000);
 
-                    // YENİ KOD: İsteğiniz üzerine yapılan değişiklik.
-                    // Hatalı/eski çerezleri temizlemek için ClientService'i yeniden oluşturuyoruz.
-                    // Bu, randevu arama döngüsündeki başarılı token yenileme mantığıyla aynıdır.
                     _client = new ClientService();
                     Logger.Info("ClientService (HttpClient ve Çerezler) sıfırlandı.");
-                    // --- YENİ KOD SONU ---
 
                     var tokenData = await GetToken(_client, forceRefresh: true);
                     if (tokenData == null || string.IsNullOrEmpty(tokenData.Token))
                     {
-                        // Otomatik yenileme başarısız olursa (örn: şifre yanlış), son çare olarak kullanıcıdan tekrar giriş istemek mantıklıdır.
                         Logger.Error("Otomatik token yenileme başarısız. Giriş ekranına yönlendiriliyor.");
                         ConsoleUtil.WriteText("Token otomatik olarak yenilenemedi, lütfen bilgilerinizi yeniden girin.", 3000);
                         JWT_TOKEN = null;
@@ -308,7 +350,7 @@ namespace MHRS_OtomatikRandevu
                     TOKEN_END_DATE = tokenData.Expiration;
                     _client.AddOrUpdateAuthorizationHeader(JWT_TOKEN);
                     Logger.Info("Token başarıyla yenilendi. İl listesi tekrar isteniyor.");
-                    provinceListResponse = null; // Döngünün devam etmesi için null'a çekiyoruz.
+                    provinceListResponse = null; 
                 }
             }
 
@@ -316,7 +358,7 @@ namespace MHRS_OtomatikRandevu
             {
                 Logger.Error("Tüm denemelere rağmen il listesi alınamadı. Program sonlandırılıyor.");
                 ConsoleUtil.WriteText("Kritik bir hata oluştu, il listesi alınamıyor. Program kapatılıyor.", 3000);
-                HandleExit(true); // Otomatik olarak token'ı sil ve çık
+                HandleExit(true); 
                 return;
             }
 
@@ -802,6 +844,12 @@ namespace MHRS_OtomatikRandevu
 
                         // YENİ EKLENEN SAAT FİLTRESİ
                         bool hourMatch;
+
+						if (string.IsNullOrEmpty(slot.BaslangicZamani))
+						{
+						    continue; // Tarihi olmayan slotu atla, döngüde bir sonrakine geç
+						}
+						
                         try
                         {
                             int slotHour = DateTime.Parse(slot.BaslangicZamani).Hour;
@@ -840,6 +888,12 @@ namespace MHRS_OtomatikRandevu
                         string kurumAdi = finalSlotToBook.KurumAdi ?? repCombo.HospitalText;
 
                         Logger.WriteLineAndLog($"   Randevu deneniyor: {finalSlotToBook.BaslangicZamani} Dr:{doktorAdi} Yer:{yerAdi} Kurum:{kurumAdi}");
+
+						if(finalSlotToBook.BaslangicZamani == null || finalSlotToBook.BitisZamani == null)
+						{
+						    Logger.Error($"Slot ID {finalSlotToBook.Id} için başlangıç veya bitiş zamanı null. Atlanıyor.");
+						    continue;
+						}
 
                         var appReq = new AppointmentRequestModel
                         {
@@ -1120,23 +1174,32 @@ namespace MHRS_OtomatikRandevu
                         BaslangicZamani = alinanSlotDetaylari.BaslangicZamani,
                         BitisZamani = alinanSlotDetaylari.BitisZamani,
                     };
-
+                
                     Logger.LogObject(LogLevel.API_REQUEST, cancelAndRebookRequest, $"Cancel and Rebook Request to {MHRSUrls.CancelAndRebookAppointment}");
-                    randevuResp = await client.PostForCancelAndRebook(MHRSUrls.BaseUrl, MHRSUrls.CancelAndRebookAppointment, cancelAndRebookRequest);
-                    Logger.LogObject(randevuResp.Success ? LogLevel.API_RESPONSE_SUCCESS : LogLevel.API_RESPONSE_FAIL, randevuResp, "Cancel and Rebook Yanıtı");
-
-                    rawJson = randevuResp.Messages?.FirstOrDefault();
-                    detailedResp = null;
-                    if (!string.IsNullOrEmpty(rawJson))
+                    var cancelRebookBaseResp = await client.PostForCancelAndRebook(MHRSUrls.BaseUrl, MHRSUrls.CancelAndRebookAppointment, cancelAndRebookRequest);
+                    Logger.LogObject(cancelRebookBaseResp.Success ? LogLevel.API_RESPONSE_SUCCESS : LogLevel.API_RESPONSE_FAIL, cancelRebookBaseResp, "Cancel and Rebook Yanıtı");
+                
+                    string? cancelRebookRawJson = cancelRebookBaseResp.Messages?.FirstOrDefault();
+                    
+                    // DÜZELTME: Yanıtı, 'infos' listesini içeren doğru modele (ApiResponse<object>) dönüştür.
+                    ApiResponse<object>? apiResponse = null; 
+                    if (!string.IsNullOrEmpty(cancelRebookRawJson))
                     {
-                        try { detailedResp = JsonSerializer.Deserialize<DetailedAppointmentResponse>(rawJson); }
-                        catch (JsonException) { }
+                        try 
+                        { 
+                            apiResponse = JsonSerializer.Deserialize<ApiResponse<object>>(cancelRebookRawJson);
+                        }
+                        catch (JsonException jex) 
+                        {
+                             Logger.Error($"'İptal Et ve Yeni Al' yanıtı JSON olarak ayrıştırılamadı. Yanıt: {cancelRebookRawJson}", jex);
+                        }
                     }
-
-                    if (randevuResp.Success && (detailedResp == null || (!detailedResp.errors.Any() && !detailedResp.warnings.Any())))
+                
+                    // DÜZELTME: Başarıyı doğrulamak için 'apiResponse' nesnesindeki 'infos' listesini kontrol et.
+                    if (apiResponse != null && apiResponse.Success && apiResponse.Infos.Any(i => i.kodu == "RND5036"))
                     {
                         await HandleAppointmentFound(aramaKriterleri, alinanSlotDetaylari, "YENİ RANDEVU ALINDI (ESKİSİ İPTAL EDİLDİ)!");
-                        return AppointmentAttemptResult.Success;
+                        return AppointmentAttemptResult.Success; // Başarıyla çıkış yap.
                     }
                 }
             }
@@ -1177,31 +1240,31 @@ namespace MHRS_OtomatikRandevu
             Console.Clear();
 
             string asciiArt = @"
-========================================================================================================================
-//  ooooooooo.         .o.       ooooo      ooo oooooooooo.   oooooooooooo oooooo     oooo ooooo     ooo              ||
-//  `888   `Y88.      .888.      `888b.     `8  `888    `Y8b  `888      `8  `888.     .8   `888      `8               ||
-//   888   .d88      .8 888.      8 `88b.    8   888      888  888           `888.   .8     888       8               ||
-//   888ooo88P      .8  `888.     8   `88b.  8   888      888  888oooo8       `888. .8      888       8               ||
-//   888`88b.      .88ooo8888.    8     `88b.8   888      888  888             `888.8       888       8               ||
-//   888  `88b.   .8      `888.   8       `888   888     d88   888       o      `888        `88.    .8                ||
-//  o888o  o888o o88o     o8888o o8o        `8  o888bood8P    o888ooooood8       `8           `YbodP                  ||
-//                 oooooooooo.  ooooo     ooo ooooo        ooooo     ooo ooooo      ooo oooooooooo.   ooooo     ooo   ||
-//                 `888    `Y8b `888      `8  `888         `888      `8  `888b.     `8  `888    `Y8b  `888      `8    ||
-//                  888     888  888       8   888          888       8   8 `88b.    8   888      888  888       8    ||
-//                  888oooo888   888       8   888          888       8   8   `88b.  8   888      888  888       8    ||
-//                  888    `88b  888       8   888          888       8   8     `88b.8   888      888  888       8    ||
-//                  888    .88P  `88.    .8    888       o  `88.    .8    8       `888   888     d88   `88.    .8     ||
-//                 o888bood8P      `YbodP     o888ooooood8    `YbodP     o8o        `8  o888bood8P       `YbodP       ||
-//                                                                                                                    ||
-//                                MematiBas42 acil şifalar diler...                                                   ||
-//                                                                                                                    ||
-========================================================================================================================";
+=======================================================================================================
+//ooooooooo.         .o.       ooooo      ooo oooooooooo.   oooooooooooo oooooo     oooo ooooo     ooo||
+//`888   `Y88.      .888.      `888b.     `8  `888    `Y8b  `888      `8  `888.     .8   `888      `8 ||
+// 888   .d88      .8 888.      8 `88b.    8   888      888  888           `888.   .8     888       8 ||
+// 888ooo88P      .8  `888.     8   `88b.  8   888      888  888oooo8       `888. .8      888       8 ||
+// 888`88b.      .88ooo8888.    8     `88b.8   888      888  888             `888.8       888       8 ||
+// 888  `88b.   .8      `888.   8       `888   888     d88   888       o      `888        `88.    .8  ||
+//o888o  o888o o88o     o8888o o8o        `8  o888bood8P    o888ooooood8       `8           `YbodP    ||
+//    oooooooooo.  ooooo     ooo ooooo        ooooo     ooo ooooo      ooo oooooooooo.   ooooo     ooo||
+//    `888    `Y8b `888      `8  `888         `888      `8  `888b.     `8  `888    `Y8b  `888      `8 ||
+//     888     888  888       8   888          888       8   8 `88b.    8   888      888  888       8 ||
+//     888oooo888   888       8   888          888       8   8   `88b.  8   888      888  888       8 ||
+//     888    `88b  888       8   888          888       8   8     `88b.8   888      888  888       8 ||
+//     888    .88P  `88.    .8    888       o  `88.    .8    8       `888   888     d88   `88.    .8  ||
+//    o888bood8P      `YbodP     o888ooooood8    `YbodP     o8o        `8  o888bood8P       `YbodP    ||
+//                                                                                                    ||
+//                              MematiBas42 acil şifalar diler...                                     ||
+//                              telegram: @cephanelikchat                                             ||
+=======================================================================================================";
             Console.WriteLine(asciiArt);
             
             Logger.WriteLineAndLog(successMessage);
             Console.WriteLine($"\n=============== {successMessage} ===============\n");
 
-            string detay = $"Tarih      : {DateTime.Parse(alinanSlotDetaylari.BaslangicZamani ?? string.Empty):dd MMMM yyyy, dddd HH:mm}\n" +
+            string detay = $"Tarih      : {DateTime.Parse(alinanSlotDetaylari.BaslangicZamani ?? string.Empty):dd MMMMopencamerastudio, dddd HH:mm}\n" +
                            $"Hastane    : {alinanSlotDetaylari.KurumAdi ?? aramaKriterleri.HospitalText}\n" +
                            $"Klinik     : {aramaKriterleri.ClinicText}\n" +
                            $"Muayene Yeri: {alinanSlotDetaylari.MuayeneYeriAdi ?? "Belirtilmedi"}\n" +
@@ -1215,7 +1278,7 @@ namespace MHRS_OtomatikRandevu
             {
                 Logger.WriteLineAndLog("Telegram bildirimi gönderiliyor...");
                 string notificationMessage = $"✅ RANDEVU BULUNDU! ✅\n\n" +
-                                             $"Tarih: {DateTime.Parse(alinanSlotDetaylari.BaslangicZamani ?? string.Empty):dd MMMM yyyy, dddd HH:mm}\n" +
+                                             $"Tarih: {DateTime.Parse(alinanSlotDetaylari.BaslangicZamani ?? string.Empty):dd MMMMcourseSurvey, dddd HH:mm}\n" +
                                              $"Hastane: {alinanSlotDetaylari.KurumAdi ?? aramaKriterleri.HospitalText}\n" +
                                              $"Klinik: {aramaKriterleri.ClinicText}\n" +
                                              $"Muayene Yeri: {alinanSlotDetaylari.MuayeneYeriAdi ?? "Belirtilmedi"}\n" +
@@ -1235,7 +1298,7 @@ namespace MHRS_OtomatikRandevu
                 if (bool.TryParse(ConfigurationManager.AppSettings["PlayAlarmOnFound"], out bool playAlarm) && playAlarm)
                 {
                     Logger.Info("PlayAlarmOnFound=true. Alarm çalınıyor...");
-                    Task.Run(() => {
+                    await Task.Run(() => {
                         try
                         {
                             for (int i = 0; i < 30; i++)
