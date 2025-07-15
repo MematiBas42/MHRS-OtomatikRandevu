@@ -111,8 +111,10 @@ dotnet run
 
 ---
 ☕ Bir kahve ısmarlamak isterseniz:
-coff.ee/mematibas42
+[coff.ee/mematibas42](https://coff.ee/mematibas42)  oluşturabilirsiniz
+
 Or, 
+
 Tron (trc20) USDT: TKkw5XRWXeZk4GHA1GibtcNpu8YpN9zzbJ
 
 📬 Geri bildirim, öneri veya katkı sağlamak isterseniz [issue](https://github.com/mematibas42/MHRS-OtomatikRandevu/issues) veya [pull request](https://github.com/mematibas42/MHRS-OtomatikRandevu/pulls)  oluşturabilirsiniz.
