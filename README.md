@@ -110,6 +110,11 @@ dotnet run
 > Not: `App.config` dosyasını oluşturup yukarıdaki örneğe göre yapılandırmanız gerekir.
 
 ---
+☕ Bir kahve ısmarlamak isterseniz:
+coff.ee/mematibas42
+Or, 
+Tron (trc20) USDT: TKkw5XRWXeZk4GHA1GibtcNpu8YpN9zzbJ
+
 📬 Geri bildirim, öneri veya katkı sağlamak isterseniz [issue](https://github.com/mematibas42/MHRS-OtomatikRandevu/issues) veya [pull request](https://github.com/mematibas42/MHRS-OtomatikRandevu/pulls)  oluşturabilirsiniz.
 
 Bu proje geliştirilirken [enescaakir/MHRS-OtomatikRandevu](https://github.com/enescaakir/MHRS-OtomatikRandevu) deposundan faydalanılmıştır.
