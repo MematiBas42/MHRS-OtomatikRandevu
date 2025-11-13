@@ -20,8 +20,7 @@ namespace MHRS_OtomatikRandevu.Utils
                 return reader.GetInt32();
             }
 
-            // Return a default value or throw an exception if the token is neither a string nor a number
-            return -1; // Or handle as an error
+            return -1;
         }
 
         public override void Write(Utf8JsonWriter writer, int value, JsonSerializerOptions options)

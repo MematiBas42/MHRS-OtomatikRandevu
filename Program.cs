@@ -1188,7 +1188,7 @@ namespace MHRS_OtomatikRandevu
                 DateTime eskiRandevuTarihi = DateTime.MinValue;
                 bool shouldAttemptCancelAndRebook = false;
 
-                Match dateMatch = Regex.Match(rnd5015Warning.mesaj ?? "", @"(\d{2}\.\d{2}\.\d{4})");
+                Match dateMatch = Regex.Match(rnd5015Warning.mesaj ?? "", @"(\d{{2}}\.\d{{2}}\.\d{{4}})");
                 if (dateMatch.Success && DateTime.TryParseExact(dateMatch.Groups[1].Value, "dd.MM.yyyy", null, System.Globalization.DateTimeStyles.None, out eskiRandevuTarihi))
                 {
                     if (yeniRandevuTarihi.Date < eskiRandevuTarihi.Date)
@@ -1305,24 +1305,30 @@ namespace MHRS_OtomatikRandevu
             Console.WriteLine($"\n=============== {successMessage} ===============\n");
 
             
+            string detay = $"Tarih: {DateTime.Parse(alinanSlotDetaylari.BaslangicZamani ?? string.Empty):dd MMMM yyyy, dddd HH:mm}\n" +
+                           $"Hastane: {alinanSlotDetaylari.KurumAdi ?? aramaKriterleri.HospitalText}\n" +
+                           $"Klinik: {aramaKriterleri.ClinicText}\n" +
+                           $"Muayene Yeri: {alinanSlotDetaylari.MuayeneYeriAdi ?? "Belirtilmedi"}\n" +
+                           $"Doktor: {alinanSlotDetaylari.HekimAdi ?? "Belirtilmedi"}";
+
+            Console.WriteLine(detay);
+            Logger.Info("Randevu detayları konsola yazdırıldı.");
+            Logger.Info(detay);
+            
             try
             {
                 Logger.WriteLineAndLog("Telegram bildirimi gönderiliyor...");
-                string notificationMessage = $"✅ RANDEVU BULUNDU! ✅\n\n" +
-                                             $"Tarih: {DateTime.Parse(alinanSlotDetaylari.BaslangicZamani ?? string.Empty):dd MMMM yyyy, dddd HH:mm}\n" +
-                                             $"Hastane: {alinanSlotDetaylari.KurumAdi ?? aramaKriterleri.HospitalText}\n" +
-                                             $"Klinik: {aramaKriterleri.ClinicText}\n" +
-                                             $"Muayene Yeri: {alinanSlotDetaylari.MuayeneYeriAdi ?? "Belirtilmedi"}\n" +
-                                             $"Doktor: {alinanSlotDetaylari.HekimAdi ?? "Belirtilmedi"}";
+                string notificationMessage = $"✅ RANDEVU BULUNDU! ✅\n\n" + detay;
                 
                 await _notificationService.SendNotification(notificationMessage);
+                Console.WriteLine("Telegram bildirimi gönderildi.");
+                Logger.Info("Telegram bildirimi başarıyla gönderildi.");
                 Console.WriteLine("\n========================================================\n");
             }
-
             catch (Exception ex)
             {
                 Logger.Error("Telegram bildirimi gönderilirken beklenmedik bir hata oluştu.", ex);
-                Console.WriteLine("Telegram bildirimi gönderilemedi (Kritik Hata).");
+                Console.WriteLine("Telegram bildirimi gönderilemedi.");
             }
 
             try
