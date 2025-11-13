@@ -39,26 +39,53 @@ Uygulama, modern .NET özellikleri kullanılarak **taşınabilir, performanslı 
 
 ## 🛠️ Nasıl Kullanılır? (Son Kullanıcılar İçin)
 
-### 🚀 Tek Komutla Kurulum ve Güncelleme!
+### 🚀 Platformunuza Özel Tek Komutla Kurulum
 
-Uygulamayı kurmak veya mevcut kurulumunuzu en son sürüme güncellemek için tek yapmanız gereken, terminalinizde aşağıdaki komutu çalıştırmak:
+Aşağıdan işletim sisteminize uygun komutu kopyalayıp terminalinize yapıştırın. Bu komut, `curl` gibi gerekli araçları kuracak, en son sürümü indirip yükleyecek ve uygulamayı sizin için başlatacaktır.
 
+---
+
+#### 🐧 **Linux (Debian / Ubuntu)**
+```bash
+sudo apt-get update -y && sudo apt-get install -y curl && curl -sL https://raw.githubusercontent.com/MematiBas42/MHRS-OtomatikRandevu/master/install.sh | bash
+```
+
+---
+
+####  Fedora / CentOS / RHEL
+```bash
+sudo dnf install -y curl && curl -sL https://raw.githubusercontent.com/MematiBas42/MHRS-OtomatikRandevu/master/install.sh | bash
+```
+
+---
+
+#### **Arch Linux**
+```bash
+sudo pacman -Syu --noconfirm curl && curl -sL https://raw.githubusercontent.com/MematiBas42/MHRS-OtomatikRandevu/master/install.sh | bash
+```
+
+---
+
+#### 📱 **Termux (Android)**
 ```bash
 curl -sL https://raw.githubusercontent.com/MematiBas42/MHRS-OtomatikRandevu/master/install.sh | bash
 ```
 
-Bu betik, platformunuzu (Windows, Linux, Termux) otomatik olarak algılar, gerekli bağımlılıkları kurar (sudo şifreniz istenebilir), en son sürümü indirir ve uygulamayı başlatır.
+---
 
-#### ✨ Betiğin Özellikleri:
+#### 🪟 **Windows**
+Windows'ta kurulum için **Git Bash** veya **WSL (Windows Subsystem for Linux)** kullanmanız gerekmektedir. Bu ortamlardan birini açtıktan sonra, yukarıdaki **Debian/Ubuntu** komutunu kullanabilirsiniz.
+
+---
+
+### ✨ Kurulum Betiğinin Özellikleri
 -   **Akıllı Güncelleme:** Mevcut kurulumunuzu kontrol eder. Yeni bir sürüm varsa, `appsettings.json` ve `token_*.txt` dosyalarınızı koruyarak sadece uygulama dosyalarını günceller.
 -   **Otomatik Alias:** İlk kurulumda, uygulamayı kolayca başlatmak için `mhrs` adında bir kısayol (alias) oluşturur. Terminali yeniden başlattıktan sonra sadece `mhrs` yazarak uygulamayı çalıştırabilirsiniz.
--   **Platforma Özel Bağımlılıklar:** Linux dağıtımları için (Ubuntu/Debian, Fedora, Arch) gerekli sistem kütüphanelerini otomatik olarak kurar.
--   **Termux Desteği:** Termux ortamında .NET SDK'sını otomatik olarak kurar ve uygulamayı çalıştırır.
+-   **Platforma Özel Bağımlılıklar:** Gerekli sistem kütüphanelerini ve araçları sizin için otomatik olarak kurar.
 -   **Otomatik Başlatma:** Kurulum/güncelleme tamamlandıktan sonra uygulamayı otomatik olarak başlatır.
 
-### 2️⃣ Ayarları Yapılandırma
-
-Uygulama ilk kez çalıştırıldığında veya güncellendiğinde, `appsettings.json` dosyanız `$HOME/mhrs_randevu/` klasöründe bulunacaktır. Bu dosyayı bir metin editörü ile açarak Telegram bildirimleri ve diğer ayarları yapılandırabilirsiniz:
+### ⚙️ Ayarları Yapılandırma
+Uygulama kurulduktan sonra, ayar dosyanız (`appsettings.json`) `$HOME/mhrs_randevu/` klasöründe bulunacaktır. Bu dosyayı bir metin editörü ile açarak Telegram bildirimleri ve diğer ayarları yapılandırabilirsiniz.
 
 ```json
 {
@@ -69,28 +96,12 @@ Uygulama ilk kez çalıştırıldığında veya güncellendiğinde, `appsettings
   "MinimumMinutesToAppointment": "60"
 }
 ```
-
-#### 🔹 `TELEGRAM_API_TOKEN` Ayarı
-- Telegram’da `@BotFather` ile `/newbot` komutunu kullanarak bot oluşturun.
-- Size verilen token’ı yukarıdaki `"..."` kısmına yapıştırın.
-
-#### 🔹 `TELEGRAM_CHAT_ID` Ayarı
-- Telegram’da `@raw_info_bot`'u açın ve `/start` yazın.
-- Bot size kullanıcı bilgilerinizi gönderecek. `chat -> id` kısmındaki sayıyı `"..."` kısmına yazın.
-
 > ⚠️ **Uyarı:** Telegram botunuzun size mesaj gönderebilmesi için, bota en az bir kere mesaj atmalısınız (örneğin: *Merhaba*).
 
-### 3️⃣ Uygulamayı Çalıştırma
-
+### ▶️ Uygulamayı Çalıştırma
 Kurulum betiği uygulamayı otomatik olarak başlatacaktır. Sonraki çalıştırmalar için:
-
 -   Terminali yeniden başlattıktan sonra sadece `mhrs` yazarak uygulamayı başlatabilirsiniz.
--   Veya `$HOME/mhrs_randevu` klasörüne gidip manuel olarak çalıştırabilirsiniz:
-    -   **Windows'ta:** `.\MHRS-OtomatikRandevu-win-x64.exe`
-    -   **Linux'ta:** `./MHRS-OtomatikRandevu-linux-x64`
-    -   **Termux'ta:** `dotnet MHRS-OtomatikRandevu.dll`
-
-İlk çalıştırmada T.C. kimlik numaranız ve MHRS şifreniz istenecek. Menüleri kullanarak randevu kriterlerinizi belirleyin. Program arka planda sürekli arama yapacaktır.
+-   Veya betiği tekrar çalıştırarak: `curl -sL https://raw.githubusercontent.com/MematiBas42/MHRS-OtomatikRandevu/master/install.sh | bash`
 
 ---
 
