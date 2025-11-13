@@ -5,6 +5,7 @@
 # token ve appsettings.json'ı koruyarak günceller ve uygulamayı başlatır.
 
 set -e
+set -o pipefail
 
 # --- Değişkenler ---
 REPO="MematiBas42/MHRS-OtomatikRandevu"
@@ -142,10 +143,10 @@ main() {
     if [ -d "/data/data/com.termux" ]; then
         echo_info "Termux ortamı algılandı."
         if ! command -v dotnet >/dev/null 2>&1; then
-                            echo_warn ".NET 8 SDK'sı bulunamadı. Kuruluyor (Bu işlem biraz zaman alabilir)..."
-                            # Paket listelerini güncelle ve sadece gerekli bağımlılıkları kur
-                            pkg update -y
-                            pkg install -y curl unzip git            curl -L https://raw.githubusercontent.com/Glow-Project/gl-dotnet/master/dotnet-install.sh | bash
+                                    echo_warn ".NET 8 SDK'sı bulunamadı. Kuruluyor (Bu işlem biraz zaman alabilir)..."
+                                    echo_info "Bağımlılıklar sessiz modda kuruluyor..."
+                                    pkg update -y > /dev/null 2>&1
+                                    pkg install -y curl unzip git > /dev/null 2>&1            curl -L https://raw.githubusercontent.com/Glow-Project/gl-dotnet/master/dotnet-install.sh | bash
             echo_warn "Lütfen terminali yeniden başlatıp kurulum betiğini tekrar çalıştırın."
             exit 0
         fi
@@ -160,7 +161,7 @@ main() {
                     echo_info "Linux (x64) ortamı algılandı."
                     echo_info "Gerekli sistem bağımlılıkları kontrol ediliyor (sudo şifreniz istenebilir)..."
                     if command -v apt-get >/dev/null 2>&1; then
-                        sudo apt-get update -y > /dev/null && sudo apt-get install -y libicu-dev libssl-dev > /dev/null
+                        sudo apt-get install -y libicu-dev libssl-dev > /dev/null
                     elif command -v dnf >/dev/null 2>&1; then
                         sudo dnf install -y libicu libssl > /dev/null
                     elif command -v pacman >/dev/null 2>&1; then
