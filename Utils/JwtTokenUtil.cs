@@ -18,7 +18,7 @@ namespace MHRS_OtomatikRandevu.Utils
                     return DateTime.MinValue;
 
                 string[] parts = token.Split('.');
-var payload = JsonSerializer.Deserialize(Base64Url.Decode(parts[1]), JsonContext.Default.JwtTokenModel);
+var payload = JsonSerializer.Deserialize<JwtTokenModel>(Base64Url.Decode(parts[1]));
 
                 // DÜZELTME: payload null olabilir.
                 if (payload == null)
