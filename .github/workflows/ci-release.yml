@@ -3,21 +3,21 @@ name: Build and Release
 on:
   push:
     tags:
-      - 'v*' # Trigger on tags like v1.0, v2.1.1, etc.
+      - 'v*' # v1.0, v2.1.1 gibi etiketlerde tetiklenir
 
 jobs:
-  build:
-    name: Build for ${{ matrix.rid }}
+  build_self_contained:
+    name: Build Self-Contained for ${{ matrix.rid }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
         include:
           - rid: 'win-x64'
             artifact_name: 'MHRS-OtomatikRandevu-win-x64'
+            output_executable: 'MHRS-OtomatikRandevu.exe'
           - rid: 'linux-x64'
             artifact_name: 'MHRS-OtomatikRandevu-linux-x64'
-          - rid: 'linux-arm64'
-            artifact_name: 'MHRS-OtomatikRandevu-linux-arm64'
+            output_executable: 'MHRS-OtomatikRandevu'
 
     steps:
       - name: Checkout code
@@ -34,8 +34,14 @@ jobs:
       - name: Build and Publish
         run: dotnet publish -c Release -r ${{ matrix.rid }} --self-contained true /p:PublishSingleFile=true -o ./publish
 
+      - name: Prepare Package
+        run: |
+          mkdir -p package
+          cp ./publish/${{ matrix.output_executable }} ./package/
+          cp appsettings.json ./package/
+      
       - name: Zip the output
-        run: zip -j ${{ matrix.artifact_name }}.zip ./publish/*
+        run: zip -j ${{ matrix.artifact_name }}.zip ./package/*
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
@@ -43,37 +49,58 @@ jobs:
           name: ${{ matrix.artifact_name }}
           path: ${{ matrix.artifact_name }}.zip
 
+  build_termux:
+    name: Build Framework-Dependent for Termux (linux-arm64)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build and Publish for Termux
+        run: dotnet publish -c Release -r linux-arm64 --self-contained false /p:PublishSingleFile=false -o ./publish
+
+      - name: Zip the output for Termux
+        run: zip -j MHRS-OtomatikRandevu-termux-arm64.zip ./publish/*
+
+      - name: Upload Termux Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MHRS-OtomatikRandevu-termux-arm64
+          path: MHRS-OtomatikRandevu-termux-arm64.zip
+
   release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
-    needs: build # This job runs only after the build job is successful
+    needs: [build_self_contained, build_termux] # Build işleri bittikten sonra çalışır
     permissions:
-      contents: write # Required to create a release
+      contents: write # Release oluşturmak için gerekli
 
     steps:
       - name: Download all build artifacts
         uses: actions/download-artifact@v4
         with:
-          path: artifacts/ # Download all artifacts to this directory
+          path: artifacts/
       
+      - name: Display structure of downloaded artifacts
+        run: ls -R artifacts
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: "Huge Refactor"
+          name: Release ${{ github.ref_name }}
           body: |
-            This release marks a major refactoring of the application for robustness, portability, and improved user experience.
-
-            ### Key Changes:
-            - **Core Bugfix:** Resolved `JsonException` from inconsistent API responses (int vs. string for IDs).
-            - **Configuration:** Migrated from `App.config` to a modern, trim-safe `appsettings.json`.
-            - **Login Flow:** Implemented auto-login with saved tokens.
-            - **Token Management:** Preserves token on exit to enable auto-login.
-            - **Exit Handling:** Fixed `Ctrl+C` race condition for a clean exit.
-            - **Build System:** The application is now built for Windows (x64), Linux (x64), and Linux (ARM64) via this CI workflow.
-
-            See the commit history for full details.
+            Bu sürüm, Termux, Linux ve Windows için otomatik derlemeleri içerir.
+            Kurulum ve kullanım detayları için README.md dosyasını inceleyebilirsiniz.
           files: |
             artifacts/MHRS-OtomatikRandevu-win-x64/MHRS-OtomatikRandevu-win-x64.zip
             artifacts/MHRS-OtomatikRandevu-linux-x64/MHRS-OtomatikRandevu-linux-x64.zip
-            artifacts/MHRS-OtomatikRandevu-linux-arm64/MHRS-OtomatikRandevu-linux-arm64.zip# CI/CD workflow update
+            artifacts/MHRS-OtomatikRandevu-termux-arm64/MHRS-OtomatikRandevu-termux-arm64.zip
