@@ -28,9 +28,9 @@ using System.Threading.Tasks;
 using System.Text.RegularExpressions;
 using System;
 using System.IO;
-using System.Configuration; // app.config okumak için eklendi
 using System.Threading;
 using System.Globalization;
+using Microsoft.Extensions.Configuration;
 
 namespace MHRS_OtomatikRandevu
 {
@@ -88,6 +88,7 @@ namespace MHRS_OtomatikRandevu
         static IClientService _client = null!;
         static INotificationService _notificationService = null!;
         static int minimumMinutesToAppointment = 0; // Çok yakın randevuları engellemek için
+        private static IConfiguration _configuration = null!;
 
         static List<int> GetMultipleSelections(List<GenericResponseModel>? options, string prompt, string entityName, bool allowFarketmez = true, string parentInfo = "")
         {
@@ -124,7 +125,7 @@ namespace MHRS_OtomatikRandevu
                 for (int i = 0; i < options.Count; i++) Console.WriteLine($"{i + 1}-{options[i].Text}");
                 Console.WriteLine("-------------------------------------------");
 
-                inputString = Logger.ReadLineAndLog($"{prompt} (örn: 1 veya 1,2,3){(allowFarketmez ? $".\n'FARKETMEZ' için sadece 0 giriniz" : "")}: ");
+                inputString = Logger.ReadLineAndLog($"{prompt} (örn: 1 veya 1,2,3){(allowFarketmez ? $'.\n\'FARKETMEZ\' için sadece 0 giriniz" : "")}: ");
                 if (inputString == null) { HandleExit(false); return new List<int>(); }
 
                 selectedIds.Clear();
@@ -251,61 +252,81 @@ namespace MHRS_OtomatikRandevu
         {
             Console.CancelKeyPress += (sender, e) => {
                 e.Cancel = true;
+                Logger.IsExiting = true;
                 HandleExit(false);
             };
 
             Logger.Info($"================ UYGULAMA BAŞLATILDI (Sürüm: {version}) ================");
             _client = new ClientService();
-            _notificationService = new NotificationService();
+            
+            _configuration = new ConfigurationBuilder()
+                .SetBasePath(AppContext.BaseDirectory)
+                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+                .Build();
 
-            try
-            {
-                minimumMinutesToAppointment = int.Parse(ConfigurationManager.AppSettings["MinimumMinutesToAppointment"] ?? "0");
-            }
-            catch { minimumMinutesToAppointment = 0; }
+            _notificationService = new NotificationService(_configuration);
+            minimumMinutesToAppointment = int.TryParse(_configuration["MinimumMinutesToAppointment"], out var minutes) ? minutes : 0;
 
 
             Logger.WriteLineAndLog("MHRS Otomatik Randevu uygulaması başlatıldı.");
             
-            LoginFlow:
-
             #region Giriş Yap Bölümü
             while (string.IsNullOrEmpty(JWT_TOKEN))
             {
                 Console.Clear();
-                if (string.IsNullOrEmpty(TC_NO) || string.IsNullOrEmpty(SIFRE))
+
+                // 1. Get TC_NO if we don't have it
+                if (string.IsNullOrEmpty(TC_NO))
                 {
-                    Console.WriteLine("MHRS Otomatik Randevu Sistemine Hoşgeldiniz. (" + version + ")\nLütfen giriş yapmak için bilgilerinizi giriniz.");
+                    Console.WriteLine("MHRS Otomatik Randevu Sistemine Hoşgeldiniz. (" + version + ")\nLütfen T.C. Kimlik Numaranızı giriniz.");
                     TC_NO = Logger.ReadLineAndLog("TC: ");
-                    if (TC_NO == null) { HandleExit(false); return; }
-
-                    if (!string.IsNullOrEmpty(TC_NO))
-                    {
-                        Logger.Initialize(TC_NO);
-                    }
-
-                    SIFRE = Logger.ReadLineAndLog("Şifre: ", isPassword: true);
-                    if (SIFRE == null) { HandleExit(false); return; }
+                    if (string.IsNullOrEmpty(TC_NO)) { HandleExit(false); return; }
+                    Logger.Initialize(_configuration, TC_NO);
                 }
 
-                if (string.IsNullOrWhiteSpace(TC_NO) || string.IsNullOrWhiteSpace(SIFRE))
+                // 2. Try to use a saved token
+                string tokenFileName = $"token_{TC_NO}.txt";
+                string tokenFilePath = Path.Combine(AppContext.BaseDirectory, tokenFileName);
+                if (File.Exists(tokenFilePath))
                 {
-                    ConsoleUtil.WriteText("TC Kimlik Numarası ve Şifre boş olamaz.", 1500);
-                    TC_NO = null; SIFRE = null; 
-                    Thread.Sleep(1500); continue;
+                    var tokenJson = await File.ReadAllTextAsync(tokenFilePath);
+                    var storedToken = JsonSerializer.Deserialize<JwtTokenModel>(tokenJson);
+                    if (storedToken != null && !string.IsNullOrEmpty(storedToken.Token) && storedToken.Expiration > DateTime.Now.AddMinutes(5))
+                    {
+                        Logger.WriteLineAndLog("Kaydedilmiş ve geçerli token bulundu, otomatik olarak kullanılıyor.");
+                        JWT_TOKEN = storedToken.Token;
+                        TOKEN_END_DATE = storedToken.Expiration;
+                        _client.AddOrUpdateAuthorizationHeader(JWT_TOKEN);
+                        Thread.Sleep(1500);
+                        continue; // Skip to the next iteration, which will exit the loop
+                    }
+                    else if (File.Exists(tokenFilePath))
+                    {
+                        try { File.Delete(tokenFilePath); Logger.Info("Süresi dolmuş/geçersiz token dosyası silindi."); } 
+                        catch (Exception ex) { Logger.Error("Token dosyası silinirken hata (süre dolumu/geçersiz).", ex); }
+                    }
+                }
+
+                // 3. If no saved token, get password and log in
+                if (string.IsNullOrEmpty(SIFRE))
+                {
+                    Logger.WriteLineAndLog("Giriş yapmak için şifrenizi giriniz.");
+                    SIFRE = Logger.ReadLineAndLog("Şifre: ", isPassword: true);
+                    if (string.IsNullOrEmpty(SIFRE)) { HandleExit(false); return; }
                 }
 
                 Logger.WriteLineAndLog("Giriş Yapılıyor...");
-                var tokenData = await GetToken(_client);
+                var tokenData = await GetToken(_client, true); // forceRefresh is true to get a new one
                 if (tokenData == null || string.IsNullOrEmpty(tokenData.Token))
                 {
                     Logger.Error("Giriş başarısız oldu. Bilgiler yeniden isteniyor.");
-                    TC_NO = null; SIFRE = null; 
+                    TC_NO = null; // Reset TC_NO to re-trigger the whole flow
+                    SIFRE = null;
                     Thread.Sleep(3000);
                     continue;
                 }
-                JWT_TOKEN = tokenData.Token; TOKEN_END_DATE = tokenData.Expiration;
-                Logger.Info($"Token başarıyla alındı. Geçerlilik sonu: {TOKEN_END_DATE}");
+                JWT_TOKEN = tokenData.Token;
+                TOKEN_END_DATE = tokenData.Expiration;
                 _client.AddOrUpdateAuthorizationHeader(JWT_TOKEN);
             }
             #endregion
@@ -323,7 +344,7 @@ namespace MHRS_OtomatikRandevu
             {
                 Logger.Info($"API Request (GET) to {MHRSUrls.GetProvinces}");
                 provinceListResponse = await _client.GetSimple<List<GenericResponseModel>>(MHRSUrls.BaseUrl, MHRSUrls.GetProvinces);
-                Logger.LogObject(LogLevel.API_RESPONSE_SUCCESS, provinceListResponse, $"Response from {MHRSUrls.GetProvinces}");
+                Logger.LogObject(LogLevel.API_RESPONSE_SUCCESS, JsonSerializer.Serialize(provinceListResponse, JsonContext.Default.ListGenericResponseModel), $"Response from {MHRSUrls.GetProvinces}");
                 
                 if (provinceListResponse == null || !provinceListResponse.Any())
                 {
@@ -337,14 +358,10 @@ namespace MHRS_OtomatikRandevu
                     var tokenData = await GetToken(_client, forceRefresh: true);
                     if (tokenData == null || string.IsNullOrEmpty(tokenData.Token))
                     {
-                        Logger.Error("Otomatik token yenileme başarısız. Giriş ekranına yönlendiriliyor.");
-                        ConsoleUtil.WriteText("Token otomatik olarak yenilenemedi, lütfen bilgilerinizi yeniden girin.", 3000);
-                        JWT_TOKEN = null;
-                        TC_NO = null;
-                        SIFRE = null;
-                        Thread.Sleep(2000);
-                        Console.Clear();
-                        goto LoginFlow;
+                        Logger.Error("Otomatik token yenileme kritik hatası. Program sonlandırılıyor.");
+                        ConsoleUtil.WriteText("Token otomatik olarak yenilenemedi. Program kapatılıyor.", 3000);
+                        HandleExit(true); // Clean exit
+                        return;
                     }
                     JWT_TOKEN = tokenData.Token;
                     TOKEN_END_DATE = tokenData.Expiration;
@@ -406,7 +423,7 @@ namespace MHRS_OtomatikRandevu
                 string districtUrl = string.Format(MHRSUrls.GetDistricts, combo.ProvinceId);
                 Logger.Info($"API Request (GET) to {districtUrl}");
                 var districtList = await _client.GetSimple<List<GenericResponseModel>>(MHRSUrls.BaseUrl, districtUrl);
-                Logger.LogObject(LogLevel.API_RESPONSE_SUCCESS, districtList, $"Response from {districtUrl}");
+                Logger.LogObject(LogLevel.API_RESPONSE_SUCCESS, JsonSerializer.Serialize(districtList, JsonContext.Default.ListGenericResponseModel), $"Response from {districtUrl}");
 
                 List<int> selectedDistrictValues = GetMultipleSelections(districtList, "İlçe Numaralarını Seçiniz", "İlçe", true, combo.ProvinceText + " için ");
                 if (!selectedDistrictValues.Any()) { continue; }
@@ -432,13 +449,13 @@ namespace MHRS_OtomatikRandevu
 
                 if (clinicListResponse?.Success == true)
                 {
-                    Logger.LogObject(LogLevel.API_RESPONSE_SUCCESS, clinicListResponse, $"Response from {clinicUrl}");
+                    Logger.LogObject(LogLevel.API_RESPONSE_SUCCESS, JsonSerializer.Serialize(clinicListResponse, JsonContext.Default.ApiResponseListGenericResponseModel), $"Response from {clinicUrl}");
                 }
 
                 if (clinicListResponse == null || !clinicListResponse.Success || clinicListResponse.Data == null || !clinicListResponse.Data.Any())
                 {
                     Logger.Error($"Klinik listesi alınamadı: İl={combo.ProvinceText}, İlçe={combo.DistrictText}.");
-                    Logger.LogObject(LogLevel.API_RESPONSE_FAIL, clinicListResponse, "Klinik Listesi Yanıtı (Başarısız)");
+                    Logger.LogObject(LogLevel.API_RESPONSE_FAIL, JsonSerializer.Serialize(clinicListResponse, JsonContext.Default.ApiResponseListGenericResponseModel), "Klinik Listesi Yanıtı (Başarısız)");
                     continue;
                 }
                 List<int> selectedClinicValues = GetMultipleSelections(clinicListResponse.Data, "Klinik Numaralarını Seçiniz", "Klinik", false, $"{combo.ProvinceText} - {combo.DistrictText} için ");
@@ -467,13 +484,13 @@ namespace MHRS_OtomatikRandevu
 
                 if (hospitalListResponse?.Success == true)
                 {
-                    Logger.LogObject(LogLevel.API_RESPONSE_SUCCESS, hospitalListResponse, $"Response from {hospitalUrl}");
+                    Logger.LogObject(LogLevel.API_RESPONSE_SUCCESS, JsonSerializer.Serialize(hospitalListResponse, JsonContext.Default.ApiResponseListGenericResponseModel), $"Response from {hospitalUrl}");
                 }
 
                 if (hospitalListResponse == null || !hospitalListResponse.Success || hospitalListResponse.Data == null)
                 {
                     Logger.Error($"Hastane listesi alınamadı: ... Klinik={combo.ClinicText}. FARKETMEZ varsayılıyor.");
-                    Logger.LogObject(LogLevel.API_RESPONSE_FAIL, hospitalListResponse, "Hastane Listesi Yanıtı (Başarısız)");
+                    Logger.LogObject(LogLevel.API_RESPONSE_FAIL, JsonSerializer.Serialize(hospitalListResponse, JsonContext.Default.ApiResponseListGenericResponseModel), "Hastane Listesi Yanıtı (Başarısız)");
                     var newComboNoHospital = combo.ShallowCopy();
                     newComboNoHospital.HospitalId = -1;
                     newComboNoHospital.HospitalText = "FARKETMEZ (Hastane Listesi Alınamadı)";
@@ -565,12 +582,12 @@ namespace MHRS_OtomatikRandevu
 
                 if (placeListResponse?.Success == true)
                 {
-                    Logger.LogObject(LogLevel.API_RESPONSE_SUCCESS, placeListResponse, $"Response from {placeUrl}");
+                    Logger.LogObject(LogLevel.API_RESPONSE_SUCCESS, JsonSerializer.Serialize(placeListResponse, JsonContext.Default.ApiResponseListClinicResponseModel), $"Response from {placeUrl}");
                 }
 
                 if (placeListResponse == null || !placeListResponse.Success || placeListResponse.Data == null)
                 {
-                    Logger.LogObject(LogLevel.API_RESPONSE_FAIL, placeListResponse, $"Response from {placeUrl}");
+                    Logger.LogObject(LogLevel.API_RESPONSE_FAIL, JsonSerializer.Serialize(placeListResponse, JsonContext.Default.ApiResponseListClinicResponseModel), $"Response from {placeUrl}");
                     var newCombo = combo.ShallowCopy();
                     newCombo.PlaceId = -1;
                     newCombo.PlaceText = "FARKETMEZ (Muayene Yeri Listesi Alınamadı)";
@@ -625,12 +642,12 @@ namespace MHRS_OtomatikRandevu
 
                 if (doctorListResponse?.Success == true)
                 {
-                    Logger.LogObject(LogLevel.API_RESPONSE_SUCCESS, doctorListResponse, $"Response from {doctorUrl}");
+                    Logger.LogObject(LogLevel.API_RESPONSE_SUCCESS, JsonSerializer.Serialize(doctorListResponse, JsonContext.Default.ApiResponseListGenericResponseModel), $"Response from {doctorUrl}");
                 }
 
                 if (doctorListResponse == null || !doctorListResponse.Success || doctorListResponse.Data == null)
                 {
-                    Logger.LogObject(LogLevel.API_RESPONSE_FAIL, doctorListResponse, $"Response from {doctorUrl}");
+                    Logger.LogObject(LogLevel.API_RESPONSE_FAIL, JsonSerializer.Serialize(doctorListResponse, JsonContext.Default.ApiResponseListGenericResponseModel), $"Response from {doctorUrl}");
                     var newCombo = combo.ShallowCopy();
                     newCombo.DoctorId = -1;
                     newCombo.DoctorText = "FARKETMEZ (Doktor Listesi Alınamadı)";
@@ -953,7 +970,7 @@ namespace MHRS_OtomatikRandevu
             {
                 if (forceRefresh && File.Exists(tokenFilePath))
                 {
-                    try { File.Delete(tokenFilePath); Logger.Info("Eski token dosyası (forceRefresh nedeniyle) silindi."); }
+                    try { File.Delete(tokenFilePath); Logger.Info("Eski token dosyası (forceRefresh nedeniyle) silindi."); } 
                     catch (Exception ex) { Logger.Error("Token dosyası silinirken hata (forceRefresh).", ex); }
                 }
 
@@ -968,7 +985,7 @@ namespace MHRS_OtomatikRandevu
                     }
                     else if (File.Exists(tokenFilePath))
                     {
-                        try { File.Delete(tokenFilePath); Logger.Info("Süresi dolmuş/geçersiz token dosyası silindi."); }
+                        try { File.Delete(tokenFilePath); Logger.Info("Süresi dolmuş/geçersiz token dosyası silindi."); } 
                         catch (Exception ex) { Logger.Error("Token dosyası silinirken hata (süre dolumu/geçersiz).", ex); }
                     }
                 }
@@ -1045,7 +1062,7 @@ namespace MHRS_OtomatikRandevu
 
                 if (File.Exists(tokenFilePath))
                 {
-                    try { File.Delete(tokenFilePath); Logger.Info("Başarısız giriş denemesi sonrası (varsa) eski token dosyası silindi."); }
+                    try { File.Delete(tokenFilePath); Logger.Info("Başarısız giriş denemesi sonrası (varsa) eski token dosyası silindi."); } 
                     catch (Exception ex) { Logger.Error("Token dosyası silinirken hata (başarısız giriş).", ex); }
                 }
 
@@ -1126,14 +1143,14 @@ namespace MHRS_OtomatikRandevu
             SubSlot alinanSlotDetaylari)
         {
             Logger.LogObject(LogLevel.API_REQUEST, standartRandevuIstekModeli, $"Appointment Request to {MHRSUrls.MakeAppointment}");
-            var randevuResp = await client.PostSimple<BaseResponse>(MHRSUrls.BaseUrl, MHRSUrls.MakeAppointment, standartRandevuIstekModeli);
+            var randevuResp = await client.PostSimple<object>(MHRSUrls.BaseUrl, MHRSUrls.MakeAppointment, standartRandevuIstekModeli);
 
             string? rawJson = randevuResp.Messages?.FirstOrDefault();
             DetailedAppointmentResponse? detailedResp = null;
 
             if (!string.IsNullOrEmpty(rawJson))
             {
-                try { detailedResp = JsonSerializer.Deserialize<DetailedAppointmentResponse>(rawJson); }
+                try { detailedResp = JsonSerializer.Deserialize<DetailedAppointmentResponse>(rawJson); } 
                 catch (JsonException jex) { Logger.Error($"Randevu yanıtı JSON olarak ayrıştırılamadı. Ham Yanıt: {rawJson}", jex); }
             }
 
@@ -1148,7 +1165,7 @@ namespace MHRS_OtomatikRandevu
                 DateTime eskiRandevuTarihi = DateTime.MinValue;
                 bool shouldAttemptCancelAndRebook = false;
 
-                Match dateMatch = Regex.Match(rnd5015Warning.mesaj ?? "", @"(\d{2}\.\d{2}\.\d{4})");
+                Match dateMatch = Regex.Match(rnd5015Warning.mesaj ?? "", @"(\d{{2}}\.\d{{2}}\.\d{{4}})");
                 if (dateMatch.Success && DateTime.TryParseExact(dateMatch.Groups[1].Value, "dd.MM.yyyy", null, System.Globalization.DateTimeStyles.None, out eskiRandevuTarihi))
                 {
                     if (yeniRandevuTarihi.Date < eskiRandevuTarihi.Date)
@@ -1203,7 +1220,7 @@ namespace MHRS_OtomatikRandevu
                     }
                 }
             }
-
+            
             if (randevuResp.Success && (detailedResp == null || (!detailedResp.errors.Any() && !detailedResp.warnings.Any())))
             {
                 await HandleAppointmentFound(aramaKriterleri, alinanSlotDetaylari, "YENİ RANDEVU ALINDI!");
@@ -1243,7 +1260,7 @@ namespace MHRS_OtomatikRandevu
 =======================================================================================================
 //ooooooooo.         .o.       ooooo      ooo oooooooooo.   oooooooooooo oooooo     oooo ooooo     ooo||
 //`888   `Y88.      .888.      `888b.     `8  `888    `Y8b  `888      `8  `888.     .8   `888      `8 ||
-// 888   .d88      .8 888.      8 `88b.    8   888      888  888           `888.   .8     888       8 ||
+// 888   .d88      .8 888.      8 `88b.    8   888      888  888           `888.   .o8     888       8 ||
 // 888ooo88P      .8  `888.     8   `88b.  8   888      888  888oooo8       `888. .8      888       8 ||
 // 888`88b.      .88ooo8888.    8     `88b.8   888      888  888             `888.8       888       8 ||
 // 888  `88b.   .8      `888.   8       `888   888     d88   888       o      `888        `88.    .8  ||
@@ -1264,7 +1281,7 @@ namespace MHRS_OtomatikRandevu
             Logger.WriteLineAndLog(successMessage);
             Console.WriteLine($"\n=============== {successMessage} ===============\n");
 
-            string detay = $"Tarih      : {DateTime.Parse(alinanSlotDetaylari.BaslangicZamani ?? string.Empty):dd MMMMopencamerastudio, dddd HH:mm}\n" +
+            string detay = $"Tarih      : {DateTime.Parse(alinanSlotDetaylari.BaslangicZamani ?? string.Empty):dd MMMM yyyy, dddd HH:mm}\n" +
                            $"Hastane    : {alinanSlotDetaylari.KurumAdi ?? aramaKriterleri.HospitalText}\n" +
                            $"Klinik     : {aramaKriterleri.ClinicText}\n" +
                            $"Muayene Yeri: {alinanSlotDetaylari.MuayeneYeriAdi ?? "Belirtilmedi"}\n" +
@@ -1278,7 +1295,7 @@ namespace MHRS_OtomatikRandevu
             {
                 Logger.WriteLineAndLog("Telegram bildirimi gönderiliyor...");
                 string notificationMessage = $"✅ RANDEVU BULUNDU! ✅\n\n" +
-                                             $"Tarih: {DateTime.Parse(alinanSlotDetaylari.BaslangicZamani ?? string.Empty):dd MMMMcourseSurvey, dddd HH:mm}\n" +
+                                             $"Tarih: {DateTime.Parse(alinanSlotDetaylari.BaslangicZamani ?? string.Empty):dd MMMM yyyy, dddd HH:mm}\n" +
                                              $"Hastane: {alinanSlotDetaylari.KurumAdi ?? aramaKriterleri.HospitalText}\n" +
                                              $"Klinik: {aramaKriterleri.ClinicText}\n" +
                                              $"Muayene Yeri: {alinanSlotDetaylari.MuayeneYeriAdi ?? "Belirtilmedi"}\n" +

@@ -5,22 +5,17 @@ using MHRS_OtomatikRandevu.Services.Abstracts;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Net.Http.Headers;
-using System.Net.Http.Json;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using MHRS_OtomatikRandevu.Models.RequestModels;
+using MHRS_OtomatikRandevu.Utils;
+using System.Text;
 
 namespace MHRS_OtomatikRandevu.Services
 {
     public class ClientService : IClientService
     {
         private readonly HttpClient _httpClient;
-        private static readonly JsonSerializerOptions _jsonOptions = new() 
-        { 
-            PropertyNameCaseInsensitive = true, 
-            NumberHandling = JsonNumberHandling.AllowReadingFromString 
-        };
 
         public ClientService()
         {
@@ -41,25 +36,21 @@ namespace MHRS_OtomatikRandevu.Services
             {
                 var response = await _httpClient.GetAsync(baseUrl + endpoint);
                 var contentString = await response.Content.ReadAsStringAsync();
-                
-                // LOGLAMA KALDIRILDI (YORUM SATIRI)
-                // Console.WriteLine($"--- API Yanıtı (GET): {endpoint} ---\n{contentString}\n-----------------------------------");
+                Logger.LogRawApiResponse(contentString, endpoint, "Get");
 
                 if (response.IsSuccessStatusCode)
                 {
-                    // Başarı durumunda bile contentString boş olabilir veya JSON olmayabilir.
-                    if (string.IsNullOrWhiteSpace(contentString)) return new ApiResponse<T> { Success = true, Data = null }; // Veya uygun bir hata yönetimi
-                    return JsonSerializer.Deserialize<ApiResponse<T>>(contentString, _jsonOptions);
+                    if (string.IsNullOrWhiteSpace(contentString)) return new ApiResponse<T> { Success = true, Data = null };
+                    return JsonSerializer.Deserialize(contentString, typeof(ApiResponse<T>), JsonContext.Default) as ApiResponse<T>;
                 }
                 else
                 {
-                     // Hata durumunda da contentString'i ayrıştırmaya çalışabiliriz (eğer API hata detayını JSON ile veriyorsa)
-                    try { return JsonSerializer.Deserialize<ApiResponse<T>>(contentString, _jsonOptions); }
-                    catch { return new ApiResponse<T> { Success = false }; /* Ayrıştırma başarısız */ }
+                    try { return JsonSerializer.Deserialize(contentString, typeof(ApiResponse<T>), JsonContext.Default) as ApiResponse<T>; }
+                    catch { return new ApiResponse<T> { Success = false }; }
                 }
             }
-            catch (JsonException jex) { Console.WriteLine($"JSON Dönüştürme Hatası ({endpoint}): {jex.Message}"); }
-            catch (HttpRequestException e) { Console.WriteLine($"İstek hatası ({endpoint}): {e.Message}"); }
+            catch (JsonException jex) { Logger.Error($"JSON Dönüştürme Hatası ({endpoint}): {jex.Message}", jex); }
+            catch (HttpRequestException e) { Logger.Error($"İstek hatası ({endpoint}): {e.Message}", e); }
             return null;
         }
 
@@ -69,23 +60,20 @@ namespace MHRS_OtomatikRandevu.Services
             {
                 var response = await _httpClient.GetAsync(baseUrl + endpoint);
                 var contentString = await response.Content.ReadAsStringAsync();
-
-                // LOGLAMA KALDIRILDI (YORUM SATIRI)
-                // Console.WriteLine($"--- API Yanıtı (GET-SIMPLE): {endpoint} ---\n{contentString}\n-----------------------------------");
+                Logger.LogRawApiResponse(contentString, endpoint, "GetSimple");
                 
                 if(response.IsSuccessStatusCode)
                 {
                     if (string.IsNullOrWhiteSpace(contentString)) return null;
-                    // LGN2001 gibi durumlar success:false dönebilir ama HTTP status 200 olabilir, bu yüzden contentString'i kontrol et
                     if (contentString.Contains("\"LGN2000\"") || contentString.Contains("\"LGN2001\"")) {
-                        Console.WriteLine($"!!! Oturum Sonlanmış/Geçersiz (LGN200x) - Endpoint: {endpoint} !!!");
+                        Logger.Warn($"Oturum Sonlanmış/Geçersiz (LGN200x) - Endpoint: {endpoint}");
                         return null; 
                     }
-                    return JsonSerializer.Deserialize<T>(contentString, _jsonOptions);
+                    return JsonSerializer.Deserialize(contentString, typeof(T), JsonContext.Default) as T;
                 }
             }
-            catch (JsonException jex) { Console.WriteLine($"JSON Dönüştürme Hatası ({endpoint}): {jex.Message}"); }
-            catch (HttpRequestException e) { Console.WriteLine($"İstek Hatası ({endpoint}): {e.Message}"); }
+            catch (JsonException jex) { Logger.Error($"JSON Dönüştürme Hatası ({endpoint}): {jex.Message}", jex); }
+            catch (HttpRequestException e) { Logger.Error($"İstek Hatası ({endpoint}): {e.Message}", e); }
             return null;
         }
 
@@ -93,20 +81,19 @@ namespace MHRS_OtomatikRandevu.Services
         {
             try
             {
-                var response = await _httpClient.PostAsJsonAsync(baseUrl + endpoint, payload, _jsonOptions);
+                var jsonPayload = JsonSerializer.Serialize(payload, payload.GetType(), JsonContext.Default);
+                var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
+                var response = await _httpClient.PostAsync(baseUrl + endpoint, content);
                 var responseString = await response.Content.ReadAsStringAsync();
-
-                // LOGLAMA KALDIRILDI (YORUM SATIRI)
-                // Console.WriteLine($"--- API Yanıtı (POST): {endpoint} ---\n{responseString}\n-----------------------------------");
+                Logger.LogRawApiResponse(responseString, endpoint, "Post");
                 
                 if (string.IsNullOrWhiteSpace(responseString)) {
-                    // Yanıt boşsa, HTTP durum koduna göre bir ApiResponse döndür
                     return new ApiResponse<T> { Success = response.IsSuccessStatusCode };
                 }
-                return JsonSerializer.Deserialize<ApiResponse<T>>(responseString, _jsonOptions);
+                return JsonSerializer.Deserialize(responseString, typeof(ApiResponse<T>), JsonContext.Default) as ApiResponse<T>;
             }
-            catch (JsonException jex) { System.Console.WriteLine($"JSON Dönüştürme Hatası ({endpoint}): {jex.Message}"); }
-            catch (HttpRequestException e) { System.Console.WriteLine($"İstek hatası ({endpoint}): {e.Message}"); }
+            catch (JsonException jex) { Logger.Error($"JSON Dönüştürme Hatası ({endpoint}): {jex.Message}", jex); }
+            catch (HttpRequestException e) { Logger.Error($"İstek hatası ({endpoint}): {e.Message}", e); }
             return null;
         }
 
@@ -115,22 +102,23 @@ namespace MHRS_OtomatikRandevu.Services
             var result = new BaseResponse { Success = false, StatusCode = System.Net.HttpStatusCode.BadRequest };
             try
             {
-                var response = await _httpClient.PostAsJsonAsync(baseUrl + endpoint, payload, _jsonOptions);
+                var jsonPayload = JsonSerializer.Serialize(payload, payload.GetType(), JsonContext.Default);
+                var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
+                var response = await _httpClient.PostAsync(baseUrl + endpoint, content);
                 result.StatusCode = response.StatusCode;
                 var responseContent = await response.Content.ReadAsStringAsync();
+                Logger.LogRawApiResponse(responseContent, endpoint, "PostSimple");
                 
-                // LOGLAMA KALDIRILDI (YORUM SATIRI)
-                // Console.WriteLine($"--- API Yanıtı (POST-SIMPLE): {endpoint} ---\n{responseContent}\n-----------------------------------");
-                
-                result.Messages = new List<string> { responseContent }; // Ham yanıtı sakla (MakeAppointment'ta parse ediliyor)
+                result.Messages = new List<string> { responseContent };
                 if (response.IsSuccessStatusCode)
                 {
-                    // API bazen success:false ama HTTP 200 dönebilir, bu yüzden JSON içindeki success'e de bakmak lazım.
-                    // Şimdilik MakeAppointment içindeki detaylı parse'a güveniyoruz.
                     result.Success = true; 
                 }
             }
-            catch (HttpRequestException e) { result.Messages = new List<string> { e.Message }; }
+            catch (HttpRequestException e) { 
+                result.Messages = new List<string> { e.Message };
+                Logger.Error($"İstek hatası ({endpoint})", e);
+            }
             return result;
         }
 		public async Task<BaseResponse> PostForCancelAndRebook(string baseUrl, string endpoint, RandevuIptalEtYeniAlRequestModel payload)
@@ -138,18 +126,18 @@ namespace MHRS_OtomatikRandevu.Services
             var result = new BaseResponse { Success = false, StatusCode = System.Net.HttpStatusCode.BadRequest };
             try
             {
-                var response = await _httpClient.PostAsJsonAsync(baseUrl + endpoint, payload, _jsonOptions);
+                var jsonPayload = JsonSerializer.Serialize(payload, JsonContext.Default.RandevuIptalEtYeniAlRequestModel);
+                var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
+                var response = await _httpClient.PostAsync(baseUrl + endpoint, content);
                 result.StatusCode = response.StatusCode;
                 var responseContent = await response.Content.ReadAsStringAsync();
-                
-                // API Yanıt Loglaması (kapalıysa yorumda kalacak)
-                // Console.WriteLine($"--- API Yanıtı (POST CancelAndRebook): {endpoint} ---\n{responseContent}\n-----------------------------------");
+                Logger.LogRawApiResponse(responseContent, endpoint, "PostForCancelAndRebook");
                 
                 result.Messages = new List<string> { responseContent }; 
                 
                 try
                 {
-                    var tempResp = JsonSerializer.Deserialize<DetailedAppointmentResponse>(responseContent, _jsonOptions);
+                    var tempResp = JsonSerializer.Deserialize(responseContent, JsonContext.Default.DetailedAppointmentResponse);
                     if (tempResp != null)
                     {
                         result.Success = tempResp.success; 
@@ -166,6 +154,7 @@ namespace MHRS_OtomatikRandevu.Services
             { 
                 result.Messages = new List<string> { e.Message }; 
                 result.Success = false;
+                Logger.Error($"İstek hatası ({endpoint}): {e.Message}", e);
             }
             return result;
         }

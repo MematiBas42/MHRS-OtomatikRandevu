@@ -4,7 +4,7 @@ using System;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Configuration;
+using Microsoft.Extensions.Configuration;
 
 namespace MHRS_OtomatikRandevu.Utils
 {
@@ -18,39 +18,56 @@ namespace MHRS_OtomatikRandevu.Utils
         ERROR,
         API_REQUEST,
         API_RESPONSE_SUCCESS,
-        API_RESPONSE_FAIL
+        API_RESPONSE_FAIL,
+        API_RAW_RESPONSE
     }
 
     public static class Logger
     {
-        private static readonly bool _isLoggingEnabled;
+        private static bool _isLoggingEnabled;
         private static string _logFilePath = Path.Combine(AppContext.BaseDirectory, "mhrs_automator_log_generic.txt");
         private static readonly object _lock = new object();
-
-        private static readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions
-        {
-            WriteIndented = true,
-            Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-        };
+        public static volatile bool IsExiting = false;
 
         static Logger()
         {
+            // Initialization is now handled by the Initialize method
+        }
+
+        public static void Initialize(IConfiguration configuration, string tcKimlikNo)
+        {
             try
             {
-                string? isLoggingValue = ConfigurationManager.AppSettings["isLogging"];
-                _isLoggingEnabled = isLoggingValue?.ToLower() == "true";
+                _isLoggingEnabled = bool.TryParse(configuration["isLogging"], out var isLogging) && isLogging;
             }
             catch (Exception ex)
             {
                 _isLoggingEnabled = false;
                 Console.WriteLine($"!!! CONFIG OKUMA HATASI: Loglama devre dışı bırakıldı. Hata: {ex.Message} !!!");
             }
-        }
 
+            if (!_isLoggingEnabled || string.IsNullOrWhiteSpace(tcKimlikNo)) return;
+            
+            string oldLogPath = _logFilePath;
+            _logFilePath = Path.Combine(AppContext.BaseDirectory, $"mhrs_automator_log_{tcKimlikNo}.txt");
+
+            lock (_lock)
+            {
+                if (File.Exists(oldLogPath) && oldLogPath != _logFilePath)
+                {
+                    string initialLogs = File.ReadAllText(oldLogPath);
+                    File.AppendAllText(_logFilePath, initialLogs);
+                    File.Delete(oldLogPath);
+                }
+            }
+
+            Log(LogLevel.INFO, $"Logger, T.C. kimlik numarasına özel loglama yapacak şekilde ayarlandı. Log dosyası: {_logFilePath}");
+        }
+        
         public static void Initialize(string tcKimlikNo)
         {
-            if (!_isLoggingEnabled || string.IsNullOrWhiteSpace(tcKimlikNo)) return;
+            // This method is kept for compatibility, but it's recommended to use the overload with IConfiguration
+            if (string.IsNullOrWhiteSpace(tcKimlikNo)) return;
             
             string oldLogPath = _logFilePath;
             _logFilePath = Path.Combine(AppContext.BaseDirectory, $"mhrs_automator_log_{tcKimlikNo}.txt");
@@ -93,7 +110,6 @@ namespace MHRS_OtomatikRandevu.Utils
 
         public static void Info(string message) => Log(LogLevel.INFO, message);
         
-        // YENİ EKLENDİ: Eksik olan Warn metodu
         public static void Warn(string message) => Log(LogLevel.WARN, message);
 
         public static void Error(string message, Exception? ex = null)
@@ -120,12 +136,14 @@ namespace MHRS_OtomatikRandevu.Utils
 
         public static string? ReadLineAndLog(string promptToShow, bool isPassword = false)
         {
+            if (IsExiting) return null;
+
             Console.Write(promptToShow);
             Log(LogLevel.PROMPT, promptToShow);
 
             string? input = Console.ReadLine();
 
-            if (input == null)
+            if (input == null || IsExiting)
             {
                 return null;
             }
@@ -142,30 +160,34 @@ namespace MHRS_OtomatikRandevu.Utils
             return input;
         }
 
-        public static void LogObject(LogLevel level, object? data, string? description = null)
+        public static void LogObject(LogLevel level, string? jsonData, string? description = null)
         {
             if (!_isLoggingEnabled) return;
             
-            if (data == null)
-            {
-                Log(level, $"{description ?? "Object"}: (null)");
-                return;
-            }
-
             string message = "";
             if (!string.IsNullOrEmpty(description))
             {
                 message += $"{description}\n";
             }
-            try
+            
+            if (jsonData == null)
             {
-                message += JsonSerializer.Serialize(data, _jsonOptions);
+                message += "(null)";
             }
-            catch (Exception ex)
+            else
             {
-                message += $"[Serialization Error] Nesne JSON'a dönüştürülemedi: {ex.Message}";
+                message += jsonData;
             }
+            
             Log(level, message);
+        }
+
+        public static void LogRawApiResponse(string content, string endpoint, string? callingMethod)
+        {
+            if (!_isLoggingEnabled) return;
+            
+            string description = $"Raw response from endpoint '{endpoint}' (called by {callingMethod ?? "Unknown Method"})";
+            Log(LogLevel.API_RAW_RESPONSE, $"{description}\n{content}");
         }
     }
 }
