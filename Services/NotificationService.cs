@@ -1,5 +1,5 @@
 using System;
-using System.Net.Http;
+using System.Net.Http.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using System.Collections.Generic;
@@ -38,12 +38,12 @@ namespace MHRS_OtomatikRandevu.Services
                    string.IsNullOrEmpty(TELEGRAM_CHAT_ID) || TELEGRAM_CHAT_ID == "BURAYA_TELEGRAM_CHAT_ID";
         }
 
-        public async Task<bool> SendNotification(string message)
+        public async Task SendNotification(string message)
         {
             if (IsConfigEmpty())
             {
                 Logger.Warn("Telegram bilgileri eksik, bildirim gönderilemiyor.");
-                return false;
+                return;
             }
 
             var url = $"https://api.telegram.org/bot{TELEGRAM_API_TOKEN}/sendMessage";
@@ -61,15 +61,13 @@ namespace MHRS_OtomatikRandevu.Services
                 {
                     var errorContent = await response.Content.ReadAsStringAsync();
                     Logger.Error($"Telegram API'ye bildirim gönderilemedi. Status: {response.StatusCode}, Response: {errorContent}");
-                    return false;
+                    return;
                 }
                 Logger.Info("Telegram bildirimi başarıyla gönderildi.");
-                return true;
             }
             catch (Exception ex)
             {
                 Logger.Error("Telegram'a bildirim gönderilirken bir istisna oluştu.", ex);
-                return false;
             }
         }
     }

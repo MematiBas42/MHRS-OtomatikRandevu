@@ -16,7 +16,7 @@ namespace MHRS_OtomatikRandevu.Utils
     [JsonSerializable(typeof(ApiResponse<List<GenericResponseModel>>))]
     [JsonSerializable(typeof(ApiResponse<List<ClinicResponseModel>>))]
     [JsonSerializable(typeof(ApiResponse<List<SlotResponseModel>>))]
-    [jsonSerializable(typeof(ApiResponse<object>))]
+    [JsonSerializable(typeof(ApiResponse<object>))]
     [JsonSerializable(typeof(List<GenericResponseModel>))]
     [JsonSerializable(typeof(BaseResponse))]
     [JsonSerializable(typeof(DetailedAppointmentResponse))]
