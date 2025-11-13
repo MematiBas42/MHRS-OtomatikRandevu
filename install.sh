@@ -146,7 +146,12 @@ main() {
                                             echo_warn ".NET 8 SDK'sı bulunamadı. Kuruluyor (Bu işlem biraz zaman alabilir)..."
                                             # Paket listelerini güncelle ve sadece gerekli bağımlılıkları kur
                                             pkg update -y
-                                            pkg install -y curl unzip git            curl -L https://raw.githubusercontent.com/Glow-Project/gl-dotnet/master/dotnet-install.sh | bash
+                                                    pkg install -y curl unzip git
+                                                    echo_info ".NET kurulum betiği indiriliyor ve çalıştırılıyor..."
+                                                    curl -sLO https://raw.githubusercontent.com/Glow-Project/gl-dotnet/master/dotnet-install.sh
+                                                    chmod +x dotnet-install.sh
+                                                    ./dotnet-install.sh
+                                                    rm dotnet-install.sh
             echo_warn "Lütfen terminali yeniden başlatıp kurulum betiğini tekrar çalıştırın."
             exit 0
         fi
