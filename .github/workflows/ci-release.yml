@@ -1,5 +1,5 @@
 # Workflow'un adı
-name: Windows Build ve Release Oluşturma
+name: Multi-Platform Build
 
 # Tetikleyici: CI dalına bir push yapıldığında çalışır
 on:
@@ -9,13 +9,19 @@ on:
 
 # İşler (Jobs)
 jobs:
-  build-and-release-windows:
-    # Çalışma ortamı: En güncel Ubuntu (Linux runner'lar .NET SDK ile Windows çıktısı üretebilir)
+  build-and-publish:
+    # Çalışma ortamı: En güncel Ubuntu
     runs-on: ubuntu-latest
     
-    # İzinler: GitHub release'i oluşturabilmek için 'contents' izni gerekir
-    permissions:
-      contents: write
+    strategy:
+      matrix:
+        include:
+          - rid: 'win-x64'
+            artifact_name: 'MHRS-OtomatikRandevu-win-x64'
+          - rid: 'linux-x64'
+            artifact_name: 'MHRS-OtomatikRandevu-linux-x64'
+          - rid: 'linux-arm64'
+            artifact_name: 'MHRS-OtomatikRandevu-linux-arm64'
 
     # Adımlar
     steps:
@@ -24,7 +30,6 @@ jobs:
         uses: actions/checkout@v4
 
       # 2. .NET 8 SDK Kurulumu
-      # Projeyi derlemek için gerekli olan .NET SDK'sını kurar
       - name: .NET SDK Kurulumu
         uses: actions/setup-dotnet@v4
         with:
@@ -34,31 +39,17 @@ jobs:
       - name: Bağımlılıkları Yükle
         run: dotnet restore
 
-      # 4. Windows için Publish Et
-      # Sizin belirttiğiniz komutu kullanarak Windows için tek dosya (.exe) oluşturur
-      - name: Windows için Publish Et
-        run: dotnet publish -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true -o ./publish
+      # 4. Platform için Publish Et
+      - name: ${{ matrix.rid }} için Publish Et
+        run: dotnet publish -c Release -r ${{ matrix.rid }} --self-contained true /p:PublishSingleFile=true -o ./publish
 
       # 5. Yayınlanan Dosyaları ZIP Arşivine Ekle
-      # Publish klasöründeki .exe ve diğer dosyaları release için sıkıştırır
       - name: Dosyaları ZIP Arşivine Ekle
-        run: zip -j MHRS-OtomatikRandevu-win-x64.zip ./publish/*
+        run: zip -j ${{ matrix.artifact_name }}.zip ./publish/*
 
-      # 6. GitHub Release Oluştur ve Asset Yükle
-      # Yeni bir "Pre-release" oluşturur ve zip dosyasını oraya yükler
-      - name: GitHub Release Oluştur
-        uses: softprops/action-gh-release@v2
+      # 6. Build Artifact'i Yükle
+      - name: Artifact'i Yükle
+        uses: actions/upload-artifact@v4
         with:
-          # Her çalıştığında benzersiz bir tag oluşturur (örn: ci-build-win-15)
-          tag_name: ci-build-win-${{ github.run_number }}
-          # Release başlığı (örn: Otomatik CI Sürümü (Windows) #15)
-          name: Otomatik CI Sürümü (Windows) #${{ github.run_number }}
-          body: |
-            Bu sürüm, CI dalına gönderilen son değişiklikler ile otomatik olarak oluşturulmuştur.
-            
-            **Platform:** Windows (win-x64)
-            **Tip:** Tek dosya, kendi içinde .NET Runtime içerir.
-          # Yüklenecek dosyalar
-          files: MHRS-OtomatikRandevu-win-x64.zip
-          # Bunun bir ön sürüm (pre-release) olduğunu belirtir
-          prerelease: true
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_name }}.zip
