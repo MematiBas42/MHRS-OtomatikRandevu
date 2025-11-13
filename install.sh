@@ -143,15 +143,18 @@ main() {
     if [ -d "/data/data/com.termux" ]; then
         echo_info "Termux ortamı algılandı."
         if ! command -v dotnet >/dev/null 2>&1; then
-                                            echo_warn ".NET 8 SDK'sı bulunamadı. Kuruluyor (Bu işlem biraz zaman alabilir)..."
-                                            # Paket listelerini güncelle ve sadece gerekli bağımlılıkları kur
-                                            pkg update -y
-                                                    pkg install -y curl unzip git
-                                                    echo_info ".NET kurulum betiği indiriliyor ve çalıştırılıyor..."
-                                                    curl -sLO https://raw.githubusercontent.com/Glow-Project/gl-dotnet/master/dotnet-install.sh
-                                                    chmod +x dotnet-install.sh
-                                                    ./dotnet-install.sh
-                                                    rm dotnet-install.sh
+        echo_warn ".NET 8 SDK'sı bulunamadı. Kuruluyor (Bu işlem biraz zaman alabilir)..."
+        # dpkg'nin interaktif soru sormasını engelle, mevcut yapılandırmayı koru ve tam yükseltme yap
+        DEBIAN_FRONTEND=noninteractive pkg update -y -o Dpkg::Options::="--force-confold"
+        DEBIAN_FRONTEND=noninteractive pkg upgrade -y -o Dpkg::Options::="--force-confold"
+        pkg install -y curl unzip git
+        
+        echo_info ".NET 8 kurulum betiği indiriliyor ve çalıştırılıyor..."
+        # Not: Glow-Project linki ölü, yeni ve çalışan bir betik kullanılıyor.
+        curl -sLO https://raw.githubusercontent.com/afraz-khan/termux-dotnet/main/install.sh
+        chmod +x install.sh
+        ./install.sh
+        rm install.sh
             echo_warn "Lütfen terminali yeniden başlatıp kurulum betiğini tekrar çalıştırın."
             exit 0
         fi
