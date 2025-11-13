@@ -143,10 +143,10 @@ main() {
     if [ -d "/data/data/com.termux" ]; then
         echo_info "Termux ortamı algılandı."
         if ! command -v dotnet >/dev/null 2>&1; then
-                                    echo_warn ".NET 8 SDK'sı bulunamadı. Kuruluyor (Bu işlem biraz zaman alabilir)..."
-                                    echo_info "Bağımlılıklar sessiz modda kuruluyor..."
-                                    pkg update -y > /dev/null 2>&1
-                                    pkg install -y curl unzip git > /dev/null 2>&1            curl -L https://raw.githubusercontent.com/Glow-Project/gl-dotnet/master/dotnet-install.sh | bash
+                                            echo_warn ".NET 8 SDK'sı bulunamadı. Kuruluyor (Bu işlem biraz zaman alabilir)..."
+                                            # Paket listelerini güncelle ve sadece gerekli bağımlılıkları kur
+                                            pkg update -y
+                                            pkg install -y curl unzip git            curl -L https://raw.githubusercontent.com/Glow-Project/gl-dotnet/master/dotnet-install.sh | bash
             echo_warn "Lütfen terminali yeniden başlatıp kurulum betiğini tekrar çalıştırın."
             exit 0
         fi
