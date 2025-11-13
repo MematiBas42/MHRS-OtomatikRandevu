@@ -147,7 +147,8 @@ main() {
                 # dpkg'nin interaktif soru sormasını engelle, mevcut yapılandırmayı koru ve tam yükseltme yap
                 DEBIAN_FRONTEND=noninteractive pkg update -y -o Dpkg::Options::="--force-confold"
                 DEBIAN_FRONTEND=noninteractive pkg upgrade -y -o Dpkg::Options::="--force-confold"
-                pkg install -y curl unzip git dotnet-sdk-8.0        fi
+                pkg install -y curl unzip git dotnet-sdk-8.0
+        fi
         perform_install_or_update "termux" "MHRS-OtomatikRandevu-termux-arm64.zip" "dotnet $APP_DLL"
     else
         OS_TYPE=$(uname -s)
