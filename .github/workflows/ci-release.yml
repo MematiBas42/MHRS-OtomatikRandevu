@@ -76,4 +76,4 @@ jobs:
           files: |
             artifacts/MHRS-OtomatikRandevu-win-x64/MHRS-OtomatikRandevu-win-x64.zip
             artifacts/MHRS-OtomatikRandevu-linux-x64/MHRS-OtomatikRandevu-linux-x64.zip
-            artifacts/MHRS-OtomatikRandevu-linux-arm64/MHRS-OtomatikRandevu-linux-arm64.zip
+            artifacts/MHRS-OtomatikRandevu-linux-arm64/MHRS-OtomatikRandevu-linux-arm64.zip# CI/CD workflow update
