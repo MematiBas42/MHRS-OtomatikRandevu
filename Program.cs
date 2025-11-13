@@ -1315,21 +1315,25 @@ namespace MHRS_OtomatikRandevu
             Logger.Info("Randevu detayları konsola yazdırıldı.");
             Logger.Info(detay);
             
-            try
+            if (_notificationService.IsConfigured)
             {
-                Logger.WriteLineAndLog("Telegram bildirimi gönderiliyor...");
-                string notificationMessage = $"✅ RANDEVU BULUNDU! ✅\n\n" + detay;
-                
-                await _notificationService.SendNotification(notificationMessage);
-                Console.WriteLine("Telegram bildirimi gönderildi.");
-                Logger.Info("Telegram bildirimi başarıyla gönderildi.");
-                Console.WriteLine("\n========================================================\n");
+                try
+                {
+                    Logger.WriteLineAndLog("Telegram bildirimi gönderiliyor...");
+                    string notificationMessage = $"✅ RANDEVU BULUNDU! ✅\n\n" + detay;
+
+                    await _notificationService.SendNotification(notificationMessage);
+                    Console.WriteLine("Telegram bildirimi gönderildi.");
+                    Logger.Info("Telegram bildirimi başarıyla gönderildi.");
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error("Telegram bildirimi gönderilirken beklenmedik bir hata oluştu.", ex);
+                    Console.WriteLine("Telegram bildirimi gönderilemedi.");
+                }
             }
-            catch (Exception ex)
-            {
-                Logger.Error("Telegram bildirimi gönderilirken beklenmedik bir hata oluştu.", ex);
-                Console.WriteLine("Telegram bildirimi gönderilemedi.");
-            }
+
+            Console.WriteLine("\n========================================================\n");
 
             try
             {

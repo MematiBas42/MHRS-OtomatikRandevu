@@ -13,5 +13,10 @@ namespace MHRS_OtomatikRandevu.Services.Abstracts
         /// <param name="message">Gönderilecek metin mesajı.</param>
         /// <returns>Operasyonun tamamlandığını belirten bir Task.</returns>
         Task SendNotification(string message);
+
+        /// <summary>
+        /// Bildirim servisinin gönderim için yapılandırılıp yapılandırılmadığını belirtir.
+        /// </summary>
+        bool IsConfigured { get; }
     }
 }

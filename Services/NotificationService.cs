@@ -13,6 +13,7 @@ namespace MHRS_OtomatikRandevu.Services
         private static readonly HttpClient _httpClient = new HttpClient();
         private readonly string? TELEGRAM_API_TOKEN;
         private readonly string? TELEGRAM_CHAT_ID;
+        public bool IsConfigured { get; private set; }
 
         public NotificationService(IConfiguration configuration)
         {
@@ -21,7 +22,9 @@ namespace MHRS_OtomatikRandevu.Services
                 TELEGRAM_API_TOKEN = configuration["TELEGRAM_API_TOKEN"];
                 TELEGRAM_CHAT_ID = configuration["TELEGRAM_CHAT_ID"];
 
-                if (IsConfigEmpty())
+                IsConfigured = !IsConfigEmpty();
+
+                if (!IsConfigured)
                 {
                     Logger.WriteLineAndLog("UYARI: Telegram API Token veya Chat ID bilgisi appsettings.json dosyasında eksik. Bildirimler gönderilemeyecek.");
                 }
@@ -29,6 +32,7 @@ namespace MHRS_OtomatikRandevu.Services
             catch (Exception ex)
             {
                  Logger.Error("appsettings.json dosyası okunurken hata oluştu. Bildirim servisi devre dışı.", ex);
+                 IsConfigured = false;
             }
         }
 
