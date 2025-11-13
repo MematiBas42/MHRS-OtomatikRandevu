@@ -282,7 +282,7 @@ namespace MHRS_OtomatikRandevu
                     Console.WriteLine("MHRS Otomatik Randevu Sistemine Hoşgeldiniz. (" + version + ")\nLütfen T.C. Kimlik Numaranızı giriniz.");
                     TC_NO = Logger.ReadLineAndLog("TC: ");
                     if (string.IsNullOrEmpty(TC_NO)) { HandleExit(false); return; }
-                    Logger.Initialize(TC_NO);
+                    Logger.Initialize(_configuration, TC_NO);
                 }
 
                 // 2. Try to use a saved token
@@ -613,12 +613,12 @@ namespace MHRS_OtomatikRandevu
                 if (combo.HospitalId == combo.AnaKurumId)
                 {
                     filteredPlaceList = originalPlaceList.Where(p => p.Text.Contains("Merkez")).ToList();
-                    Logger.Info($"Ana Kurum seçildi. Muayene yeri listesi 'Merkez' içerenlerle ({filteredPlaceList.Count} adet) sınırlandırıldı.");
+                    Logger.Info("Ana Kurum seçildi. Muayene yeri listesi 'Merkez' içerenlerle ("+ filteredPlaceList.Count + " adet) sınırlandırıldı.");
                 }
                 else if (combo.HospitalId != combo.AnaKurumId)
                 {
                     filteredPlaceList = originalPlaceList.Where(p => !p.Text.Contains("Merkez")).ToList();
-                    Logger.Info($"Alt birim seçildi. Muayene yeri listesi 'Merkez' içermeyenlerle ({filteredPlaceList.Count} adet) sınırlandırıldı.");
+                    Logger.Info("Alt birim seçildi. Muayene yeri listesi 'Merkez' içermeyenlerle ("+ filteredPlaceList.Count + " adet) sınırlandırıldı.");
                 }
 
                 List<int> selectedPlaceValues = GetMultipleSelectionsForPlaces(filteredPlaceList, "Muayene Yeri Numaralarını Seçiniz", "Muayene Yeri", true, $"{combo.HospitalText} için ");
@@ -985,7 +985,7 @@ namespace MHRS_OtomatikRandevu
             if (forceRefresh && File.Exists(tokenFilePath))
             {
                 try 
-                { 
+                {
                     File.Delete(tokenFilePath); 
                     Logger.Info("Token dosyası, zorunlu yenileme (forceRefresh) nedeniyle silindi."); 
                 } 
@@ -1188,7 +1188,7 @@ namespace MHRS_OtomatikRandevu
                 DateTime eskiRandevuTarihi = DateTime.MinValue;
                 bool shouldAttemptCancelAndRebook = false;
 
-                Match dateMatch = Regex.Match(rnd5015Warning.mesaj ?? "", @"(\d{{2}}\.\d{{2}}\.\d{{4}})");
+                Match dateMatch = Regex.Match(rnd5015Warning.mesaj ?? "", @"(\d{2}\.\d{2}\.\d{4})");
                 if (dateMatch.Success && DateTime.TryParseExact(dateMatch.Groups[1].Value, "dd.MM.yyyy", null, System.Globalization.DateTimeStyles.None, out eskiRandevuTarihi))
                 {
                     if (yeniRandevuTarihi.Date < eskiRandevuTarihi.Date)
@@ -1226,7 +1226,7 @@ namespace MHRS_OtomatikRandevu
                     if (!string.IsNullOrEmpty(cancelRebookRawJson))
                     {
                         try 
-                        { 
+                        {
                             apiResponse = JsonSerializer.Deserialize<ApiResponse<object>>(cancelRebookRawJson);
                         }
                         catch (JsonException jex) 
@@ -1281,20 +1281,20 @@ namespace MHRS_OtomatikRandevu
 
             string asciiArt = @"
 =======================================================================================================
-//ooooooooo.         .o.       ooooo      ooo oooooooooo.   oooooooooooo oooooo     oooo ooooo     ooo||
-//`888   `Y88.      .888.      `888b.     `8  `888    `Y8b  `888      `8  `888.     .8   `888      `8 ||
-// 888   .d88      .8 888.      8 `88b.    8   888      888  888           `888.   .o8    888       8 ||
-// 888ooo88P      .8  `888.     8   `88b.  8   888      888  888oooo8       `888. .8      888       8 ||
-// 888`88b.      .88ooo8888.    8     `88b.8   888      888  888             `888.8       888       8 ||
-// 888  `88b.   .8      `888.   8       `888   888     d88   888       o      `888        `88.    .8  ||
-//o888o  o888o o88o     o8888o o8o        `8  o888bood8P    o888ooooood8       `8           `YbodP    ||
-//    oooooooooo.  ooooo     ooo ooooo        ooooo     ooo ooooo      ooo oooooooooo.   ooooo     ooo||
-//    `888    `Y8b `888      `8  `888         `888      `8  `888b.     `8  `888    `Y8b  `888      `8 ||
-//     888     888  888       8   888          888       8   8 `88b.    8   888      888  888       8 ||
-//     888oooo888   888       8   888          888       8   8   `88b.  8   888      888  888       8 ||
-//     888    `88b  888       8   888          888       8   8     `88b.8   888      888  888       8 ||
-//     888    .88P  `88.    .8    888       o  `88.    .8    8       `888   888     d88   `88.    .8  ||
-//    o888bood8P      `YbodP     o888ooooood8    `YbodP     o8o        `8  o888bood8P       `YbodP    ||
+//ooooooooo.         .o.       ooooo      ooo oooooooooo.   oooooooooooo oooooo     oooo ooooo     ooo|| 
+//`888   `Y88.      .888.      `888b.     `8  `888    `Y8b  `888      `8  `888.     .8   `888      `8 || 
+// 888   .d88      .8 888.      8 `88b.    8   888      888  888           `888.   .o8    888       8 || 
+// 888ooo88P      .8  `888.     8   `88b.  8   888      888  888oooo8       `888. .8      888       8 || 
+// 888`88b.      .88ooo8888.    8     `88b.8   888      888  888             `888.8       888       8 || 
+// 888  `88b.   .8      `888.   8       `888   888     d88   888       o      `888        `88.    .8  || 
+//o888o  o888o o88o     o8888o o8o        `8  o888bood8P    o888ooooood8       `8           `YbodP    || 
+//    oooooooooo.  ooooo     ooo ooooo        ooooo     ooo ooooo      ooo oooooooooo.   ooooo     ooo|| 
+//    `888    `Y8b `888      `8  `888         `888      `8  `888b.     `8  `888    `Y8b  `888      `8 || 
+//     888     888  888       8   888          888       8   8 `88b.    8   888      888  888       8 || 
+//     888oooo888   888       8   888          888       8   8   `88b.  8   888      888  888       8 || 
+//     888    `88b  888       8   888          888       8   8     `88b.8   888      888  888       8 || 
+//     888    .88P  `88.    .8    888       o  `88.    .8    8       `888   888     d88   `88.    .8  || 
+//    o888bood8P      `YbodP     o888ooooood8    `YbodP     o8o        `8  o888bood8P       `YbodP    || 
 //                                                                                                    ||
 //                              MematiBas42 acil şifalar diler...                                     ||
 //                              telegram: @cephanelikchat                                             ||

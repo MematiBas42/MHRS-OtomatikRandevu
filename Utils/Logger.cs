@@ -6,8 +6,6 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Configuration;
 
-using System.Configuration;
-
 namespace MHRS_OtomatikRandevu.Utils
 {
     public enum LogLevel
@@ -25,7 +23,7 @@ namespace MHRS_OtomatikRandevu.Utils
 
     public static class Logger
     {
-        private static readonly bool _isLoggingEnabled;
+        private static bool _isLoggingEnabled;
         private static string _logFilePath = Path.Combine(AppContext.BaseDirectory, "mhrs_automator_log_generic.txt");
         private static readonly object _lock = new object();
         public static volatile bool IsExiting = false;
@@ -37,22 +35,18 @@ namespace MHRS_OtomatikRandevu.Utils
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
         };
 
-        static Logger()
+        public static void Initialize(IConfiguration configuration, string tcKimlikNo)
         {
             try
             {
-                string? isLoggingValue = System.Configuration.ConfigurationManager.AppSettings["isLogging"];
-                _isLoggingEnabled = isLoggingValue?.ToLower() == "true";
+                _isLoggingEnabled = configuration.GetValue<bool>("isLogging");
             }
             catch (Exception ex)
             {
                 _isLoggingEnabled = false;
                 Console.WriteLine($"!!! CONFIG OKUMA HATASI: Loglama devre dışı bırakıldı. Hata: {ex.Message} !!!");
             }
-        }
 
-        public static void Initialize(string tcKimlikNo)
-        {
             if (!_isLoggingEnabled || string.IsNullOrWhiteSpace(tcKimlikNo)) return;
             
             string oldLogPath = _logFilePath;
@@ -62,9 +56,16 @@ namespace MHRS_OtomatikRandevu.Utils
             {
                 if (File.Exists(oldLogPath) && oldLogPath != _logFilePath)
                 {
-                    string initialLogs = File.ReadAllText(oldLogPath);
-                    File.AppendAllText(_logFilePath, initialLogs);
-                    File.Delete(oldLogPath);
+                    try
+                    {
+                        string initialLogs = File.ReadAllText(oldLogPath);
+                        File.AppendAllText(_logFilePath, initialLogs);
+                        File.Delete(oldLogPath);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Eski log dosyası taşınırken hata: {ex.Message}");
+                    }
                 }
             }
 
@@ -172,7 +173,5 @@ namespace MHRS_OtomatikRandevu.Utils
             
             Log(level, message);
         }
-
-
     }
 }
