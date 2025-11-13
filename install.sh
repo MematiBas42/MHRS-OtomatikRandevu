@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v2)
 # Platformu algılar, bağımlılıkları kurar, en son sürümü indirir,
