@@ -39,17 +39,26 @@ Uygulama, modern .NET özellikleri kullanılarak **taşınabilir, performanslı 
 
 ## 🛠️ Nasıl Kullanılır? (Son Kullanıcılar İçin)
 
-### 1️⃣ Programı İndirme
-1. Bu GitHub deposunun sağ tarafındaki **Releases (Sürümler)** sekmesine tıklayın.
-2. En güncel sürüm altındaki **Assets** bölümünden işletim sisteminize uygun dosyayı indirin:
-   - **Windows için:** `MHRS-OtomatikRandevu-win-x64.zip`
-   - **Linux için:** `MHRS-OtomatikRandevu-linux-x64.zip`
-   - **Termux (Android) için:** `MHRS-OtomatikRandevu-linux-arm64.zip`
-3. `.zip` dosyasını bir klasöre çıkartın.
+### 🚀 Tek Komutla Kurulum ve Güncelleme!
+
+Uygulamayı kurmak veya mevcut kurulumunuzu en son sürüme güncellemek için tek yapmanız gereken, terminalinizde aşağıdaki komutu çalıştırmak:
+
+```bash
+curl -sL https://raw.githubusercontent.com/MematiBas42/MHRS-OtomatikRandevu/master/install.sh | bash
+```
+
+Bu betik, platformunuzu (Windows, Linux, Termux) otomatik olarak algılar, gerekli bağımlılıkları kurar (sudo şifreniz istenebilir), en son sürümü indirir ve uygulamayı başlatır.
+
+#### ✨ Betiğin Özellikleri:
+-   **Akıllı Güncelleme:** Mevcut kurulumunuzu kontrol eder. Yeni bir sürüm varsa, `appsettings.json` ve `token_*.txt` dosyalarınızı koruyarak sadece uygulama dosyalarını günceller.
+-   **Otomatik Alias:** İlk kurulumda, uygulamayı kolayca başlatmak için `mhrs` adında bir kısayol (alias) oluşturur. Terminali yeniden başlattıktan sonra sadece `mhrs` yazarak uygulamayı çalıştırabilirsiniz.
+-   **Platforma Özel Bağımlılıklar:** Linux dağıtımları için (Ubuntu/Debian, Fedora, Arch) gerekli sistem kütüphanelerini otomatik olarak kurar.
+-   **Termux Desteği:** Termux ortamında .NET SDK'sını otomatik olarak kurar ve uygulamayı çalıştırır.
+-   **Otomatik Başlatma:** Kurulum/güncelleme tamamlandıktan sonra uygulamayı otomatik olarak başlatır.
 
 ### 2️⃣ Ayarları Yapılandırma
-1. Çıkarttığınız klasörde `appsettings.json` dosyasını bir metin editörü ile açın.
-2. Aşağıdaki bölümü kendi bilgilerinize göre düzenleyin:
+
+Uygulama ilk kez çalıştırıldığında veya güncellendiğinde, `appsettings.json` dosyanız `$HOME/mhrs_randevu/` klasöründe bulunacaktır. Bu dosyayı bir metin editörü ile açarak Telegram bildirimleri ve diğer ayarları yapılandırabilirsiniz:
 
 ```json
 {
@@ -71,15 +80,17 @@ Uygulama, modern .NET özellikleri kullanılarak **taşınabilir, performanslı 
 
 > ⚠️ **Uyarı:** Telegram botunuzun size mesaj gönderebilmesi için, bota en az bir kere mesaj atmalısınız (örneğin: *Merhaba*).
 
-### 3️⃣ Programı Çalıştırma
-- **Windows'ta:** `MHRS-OtomatikRandevu.exe` dosyasına çift tıklayın.
-- **Linux veya Termux'ta:** Terminali açın, programın olduğu klasöre gidin (`cd <klasör_yolu>`) ve aşağıdaki komutları çalıştırın:
-  ```bash
-  chmod +x MHRS-OtomatikRandevu
-  ./MHRS-OtomatikRandevu
-  ```
-- İlk çalıştırmada T.C. kimlik numaranız ve MHRS şifreniz istenecek.
-- Menüleri kullanarak randevu kriterlerinizi belirleyin. Program arka planda sürekli arama yapacaktır.
+### 3️⃣ Uygulamayı Çalıştırma
+
+Kurulum betiği uygulamayı otomatik olarak başlatacaktır. Sonraki çalıştırmalar için:
+
+-   Terminali yeniden başlattıktan sonra sadece `mhrs` yazarak uygulamayı başlatabilirsiniz.
+-   Veya `$HOME/mhrs_randevu` klasörüne gidip manuel olarak çalıştırabilirsiniz:
+    -   **Windows'ta:** `.\MHRS-OtomatikRandevu-win-x64.exe`
+    -   **Linux'ta:** `./MHRS-OtomatikRandevu-linux-x64`
+    -   **Termux'ta:** `dotnet MHRS-OtomatikRandevu.dll`
+
+İlk çalıştırmada T.C. kimlik numaranız ve MHRS şifreniz istenecek. Menüleri kullanarak randevu kriterlerinizi belirleyin. Program arka planda sürekli arama yapacaktır.
 
 ---
 
