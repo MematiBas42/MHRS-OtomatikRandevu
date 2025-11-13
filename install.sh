@@ -227,7 +227,7 @@ else
                 elif command -v dnf >/dev/null 2>&1; then
                     sudo dnf install -y libicu libssl
                 elif command -v pacman >/dev/null 2>&1; then
-                    sudo pacman -Sy --noconfirm icu openssl
+                    sudo pacman -S --needed --noconfirm icu openssl
                 else
                     echo_warn "UYARI: Desteklenmeyen Linux dağıtımı. Gerekli bağımlılıkları manuel olarak kurmanız gerekebilir (libicu, libssl)."
                 fi

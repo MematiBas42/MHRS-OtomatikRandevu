@@ -79,7 +79,7 @@ namespace MHRS_OtomatikRandevu
 
     public class Program
     {
-    	    static string version = "v1.0.7";        static string? TC_NO;
+    	    static string version = "v1.0.8";        static string? TC_NO;
         static string? SIFRE;
 
         static string? JWT_TOKEN;
