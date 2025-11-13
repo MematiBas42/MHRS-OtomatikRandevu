@@ -1015,10 +1015,17 @@ namespace MHRS_OtomatikRandevu
                 catch (Exception ex) { Logger.Error("Token dosyası okunurken/işlenirken hata.", ex); }
             }
 
+            // If we reach here, either forceRefresh was true, or no valid token was found in file.
+            // Now, ensure SIFRE is available for login.
             if (string.IsNullOrEmpty(SIFRE))
             {
-                Logger.Error("Giriş bilgileri (Şifre) bulunamadı. Yeni token alınamıyor.");
-                return null;
+                Logger.WriteLineAndLog("Giriş yapmak için şifrenizi giriniz.");
+                SIFRE = Logger.ReadLineAndLog("Şifre: ", isPassword: true);
+                if (string.IsNullOrEmpty(SIFRE))
+                {
+                    Logger.Error("Şifre girilmedi. Yeni token alınamıyor.");
+                    return null;
+                }
             }
 
             Logger.WriteLineAndLog(forceRefresh ? "Token yenileniyor (forceRefresh)..." : "Yeni token alınıyor (dosya yok veya geçersizdi)...");
