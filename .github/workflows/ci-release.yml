@@ -64,7 +64,7 @@ jobs:
           body: |
             This release marks a major refactoring of the application for robustness, portability, and improved user experience.
 
-            ### Key Changes
+            ### Key Changes:
             - **Core Bugfix:** Resolved `JsonException` from inconsistent API responses (int vs. string for IDs).
             - **Configuration:** Migrated from `App.config` to a modern, trim-safe `appsettings.json`.
             - **Login Flow:** Implemented auto-login with saved tokens.
