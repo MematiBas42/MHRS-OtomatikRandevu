@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v5.0 - Çoklu Platform)
+# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v5.1 - Kararlılık Düzeltmeleri)
 # Platformu ve mimariyi algılar, bağımlılıkları kurar, en son sürümü indirir,
 # ayarları korur ve evrensel bir başlatıcı betik ile PATH ayarını otomatik yapar.
 
@@ -55,21 +55,29 @@ create_launcher() {
 # Bu betik 'install.sh' tarafından otomatik olarak oluşturulmuştur.
 cd \"$INSTALL_DIR\"
 dotnet $APP_DLL \"$@\""
-            ;;
+            ;; 
         win-*) 
             # Self-contained Windows
             launcher_content="#!/bin/bash
 # Bu betik 'install.sh' tarafından otomatik olarak oluşturulmuştur.
 cd \"$INSTALL_DIR\"
 ./MHRS-OtomatikRandevu.exe \"$@\""
-            ;;
+            ;; 
+        alpine-*) 
+            # Self-contained Alpine with GC fix
+            launcher_content="#!/bin/bash
+# Bu betik 'install.sh' tarafından otomatik olarak oluşturulmuştur.
+export COMPlus_GCServer=0
+cd \"$INSTALL_DIR\"
+./MHRS-OtomatikRandevu \"$@\""
+            ;; 
         *) 
             # Self-contained Linux variants
             launcher_content="#!/bin/bash
 # Bu betik 'install.sh' tarafından otomatik olarak oluşturulmuştur.
 cd \"$INSTALL_DIR\"
 ./MHRS-OtomatikRandevu \"$@\""
-            ;;
+            ;; 
     esac
 
     # Betiği oluştur ve çalıştırılabilir yap
@@ -90,6 +98,8 @@ cd \"$INSTALL_DIR\"
                 shell_rc_file="$HOME/.bashrc"
             elif [ "$shell_name" = "zsh" ]; then
                 shell_rc_file="$HOME/.zshrc"
+            elif [ "$shell_name" = "ash" ]; then
+                shell_rc_file="$HOME/.profile"
             else
                 shell_rc_file=""
             fi
@@ -103,12 +113,12 @@ $HOME/.local/bin:$PATH\""
                     echo "# MHRS Otomatik Randevu için PATH ayarı" >> "$shell_rc_file"
                     echo "$export_line" >> "$shell_rc_file"
                     echo_success "✓ PATH ayarı eklendi."
-                    echo_warn "Değişikliğin etkinleşmesi için terminalinizi yeniden başlatmanız gerekmektedir."
+                    echo_warn "Değişikliğin etkinleşmesi için terminalinizi yeniden başlatmanız veya 'source $shell_rc_file' komutunu çalıştırmanız gerekmektedir."
                 else
                     echo_info "PATH ayarı '$shell_rc_file' içinde zaten mevcut."
                 fi
             else
-                echo_error "Desteklenmeyen kabuk. Lütfen '$LAUNCHER_DIR' dizinini manuel olarak PATH'inize ekleyin."
+                echo_error "Desteklenmeyen kabuk ($shell_name). Lütfen '$LAUNCHER_DIR' dizinini manuel olarak PATH'inize ekleyin."
             fi
             ;;
     esac
@@ -251,8 +261,8 @@ main() {
                     elif command -v dnf >/dev/null 2>&1; then
                         sudo dnf install -y libicu libssl > /dev/null
                     elif command -v pacman >/dev/null 2>&1; then
-                        sudo pacman -S --needed --noconfirm icu
-                        sudo pacman -S --needed --noconfirm openssl
+                        (sudo pacman -S --needed --noconfirm icu || echo_warn "UYARI: 'icu' paketi kurulamadı. Sisteminizi 'sudo pacman -Syu' ile güncellemeniz gerekebilir.")
+                        (sudo pacman -S --needed --noconfirm openssl || echo_warn "UYARI: 'openssl' paketi kurulamadı.")
                     fi
                 fi
                 echo_success "✓ Gerekli Linux bağımlılıkları kontrol edildi."
@@ -275,7 +285,7 @@ main() {
                 exit 1
             fi
             ;; 
-        *)
+        *) 
             echo_error "Desteklenmeyen İşletim Sistemi: $OS_TYPE"
             exit 1
             ;; 
