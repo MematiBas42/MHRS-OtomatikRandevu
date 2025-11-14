@@ -19,10 +19,10 @@ CONFIG_FILE="appsettings.json"
 TOKEN_PATTERN="token_*.txt"
 
 # --- Renkler ve Yardımcı Fonksiyonlar ---
-echo_info() { printf "\033[1;34m%s\033[0m\n" ""; }
-echo_success() { printf "\033[1;32m%s\033[0m\n" ""; }
-echo_error() { printf "\033[1;31m%s\033[0m\n" "" >&2; }
-echo_warn() { printf "\033[1;33m%s\033[0m\n" ""; }
+echo_info() { printf "\033[1;34m%s\033[0m\n" "$1"; }
+echo_success() { printf "\033[1;32m%s\033[0m\n" "$1"; }
+echo_error() { printf "\033[1;31m%s\033[0m\n" "$1" >&2; }
+echo_warn() { printf "\033[1;33m%s\033[0m\n" "$1"; }
 
 # Gerekli araçların varlığını kontrol et
 check_common_deps() {
@@ -41,7 +41,7 @@ get_latest_remote_version() {
 
 # Evrensel başlatıcı betiği oluşturma ve PATH kontrolü
 create_launcher() {
-    local platform_type=""
+    local platform_type="$1"
     local launcher_content
 
     echo_info "'$LAUNCHER_PATH' adresinde başlatıcı betik oluşturuluyor..."
@@ -52,17 +52,17 @@ create_launcher() {
         launcher_content="#!/bin/bash
 # Bu betik 'install.sh' tarafından otomatik olarak oluşturulmuştur.
 cd \"$INSTALL_DIR\"
-dotnet $APP_DLL \"\$@\""
+dotnet $APP_DLL \"$@\""
     elif [ "$platform_type" = "windows" ]; then
         launcher_content="#!/bin/bash
 # Bu betik 'install.sh' tarafından otomatik olarak oluşturulmuştur.
 cd \"$INSTALL_DIR\"
-./MHRS-OtomatikRandevu.exe \"\$@\""
+./MHRS-OtomatikRandevu.exe \"$@\""
     else # linux
         launcher_content="#!/bin/bash
 # Bu betik 'install.sh' tarafından otomatik olarak oluşturulmuştur.
 cd \"$INSTALL_DIR\"
-./MHRS-OtomatikRandevu \"\$@\""
+./MHRS-OtomatikRandevu \"$@\""
     fi
 
     # Betiği oluştur ve çalıştırılabilir yap
@@ -73,14 +73,15 @@ cd \"$INSTALL_DIR\"
 
     # PATH kontrolü yap ve kullanıcıyı bilgilendir
     case ":$PATH:" in
-        *":$LAUNCHER_DIR:"*)
+        *":$LAUNCHER_DIR:"*) 
             # Zaten PATH içinde, bir şey yapma
             ;;
         *)
             echo_warn "----------------------------------------------------------------"
             echo_warn "UYARI: '$LAUNCHER_DIR' dizini PATH değişkeninizde bulunmuyor."
             echo_info "Uygulamayı her yerden 'mhrs' komutuyla çalıştırmak için, lütfen aşağıdaki satırı kabuk yapılandırma dosyanıza (~/.bashrc, ~/.zshrc vb.) ekleyin:"
-            echo_info "export PATH=\"\$HOME/.local/bin:\$PATH\""
+            echo_info "export PATH=\"
+$HOME/.local/bin:$PATH\""
             echo_info "Bu değişikliğin ardından terminalinizi yeniden başlatmanız gerekmektedir."
             echo_warn "----------------------------------------------------------------"
             ;;
@@ -89,11 +90,11 @@ cd \"$INSTALL_DIR\"
 
 # --- Kurulum ve Güncelleme Mantığı ---
 perform_install_or_update() {
-    local platform_type=""
+    local platform_type="$1"
     local asset_zip_name="$2"
     local is_first_install=false
     local local_version=""
-    
+
     remote_version=$(get_latest_remote_version)
     if [ -z "$remote_version" ]; then
         echo_error "HATA: Uzak sürüm bilgisi alınamadı."
@@ -114,7 +115,7 @@ perform_install_or_update() {
 
         local temp_backup_dir
         temp_backup_dir=$(mktemp -d)
-        
+
         if [ -d "$INSTALL_DIR" ]; then
             # Token ve config dosyalarını yedekle
             find "$INSTALL_DIR" -name "$CONFIG_FILE" -exec cp {} "$temp_backup_dir/" \;
@@ -130,14 +131,14 @@ perform_install_or_update() {
             echo_error "HATA: $asset_zip_name için indirme URL'si bulunamadı."
             exit 1
         fi
-        
+
         echo_info "$asset_zip_name indiriliyor..."
         curl -L -o "$INSTALL_DIR/$asset_zip_name" "$DOWNLOAD_URL"
-        
+
         # Çıkar ve temizle
         unzip -o "$INSTALL_DIR/$asset_zip_name" -d "$INSTALL_DIR"
         rm "$INSTALL_DIR/$asset_zip_name"
-        
+
         # Yedekleri geri yükle
         find "$temp_backup_dir" -name "$CONFIG_FILE" -exec mv {} "$INSTALL_DIR/" \;
         find "$temp_backup_dir" -name "$TOKEN_PATTERN" -exec mv {} "$INSTALL_DIR/" \;
@@ -155,11 +156,11 @@ perform_install_or_update() {
     echo_info "Kurulum sonrası ilk çalıştırma yapılıyor..."
     cd "$INSTALL_DIR"
     if [ "$platform_type" = "termux" ]; then
-        dotnet $APP_DLL "$@"
+        dotnet $APP_DLL
     elif [ "$platform_type" = "windows" ]; then
-        ./MHRS-OtomatikRandevu.exe "$@"
+        ./MHRS-OtomatikRandevu.exe
     else # linux
-        ./MHRS-OtomatikRandevu "$@"
+        ./MHRS-OtomatikRandevu
     fi
 }
 
@@ -172,8 +173,8 @@ main() {
         if ! command -v dotnet >/dev/null 2>&1; then
                 echo_warn ".NET 8 SDK'sı bulunamadı. Kuruluyor (Bu işlem biraz zaman alabilir)..."
                 # dpkg'nin interaktif soru sormasını engelle, mevcut yapılandırmayı koru ve tam yükseltme yap
-                DEBIAN_FRONTEND=noninteractive pkg update -y -o Dpkg::Options::="--force-confold"
-                DEBIAN_FRONTEND=noninteractive pkg upgrade -y -o Dpkg::Options::="--force-confold"
+                DEBIAN_FRONTEND=noninteractive pkg update -y -o Dpkg::Options::=\"--force-confold\"
+                DEBIAN_FRONTEND=noninteractive pkg upgrade -y -o Dpkg::Options::=\"--force-confold\"
                 pkg install -y curl unzip git dotnet-sdk-8.0
         fi
         perform_install_or_update "termux" "MHRS-OtomatikRandevu-termux-arm64.zip"
@@ -204,7 +205,7 @@ main() {
                     echo_error "Desteklenmeyen Linux mimarisi: $ARCH_TYPE. Sadece x86_64 desteklenmektedir."
                     exit 1
                 fi
-                ;; 
+                ;;
             CYGWIN*|MINGW*|MSYS*) 
                 if [ "$ARCH_TYPE" = "x86_64" ]; then
                     echo_info "Windows (x64) ortamı algılandı."
@@ -213,11 +214,11 @@ main() {
                     echo_error "Desteklenmeyen Windows mimarisi: $ARCH_TYPE."
                     exit 1
                 fi
-                ;; 
+                ;;
             *)
                 echo_error "Desteklenmeyen işletim sistemi: $OS_TYPE"
                 exit 1
-                ;; 
+                ;;
         esac
     fi
 }
