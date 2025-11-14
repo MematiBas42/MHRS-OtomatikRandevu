@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v5.6 - Termux UX İyileştirmesi)
+# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v5.6 - Gelişmiş Ortam Düzeltmeleri)
 # Platformu ve mimariyi algılar, bağımlılıkları kurar, en son sürümü indirir,
 # ayarları korur ve evrensel bir başlatıcı betik ile PATH ayarını otomatik yapar.
 
@@ -83,42 +83,57 @@ cd \"$INSTALL_DIR\"
     echo_success "✓ Başlatıcı betik '$LAUNCHER_PATH' adresinde oluşturuldu."
 
     case ":$PATH:" in
-        *":$LAUNCHER_DIR:"*) 
+        *:") 
             echo_success "✓ '$LAUNCHER_DIR' dizini PATH içinde zaten mevcut."
             ;; 
         *)
             echo_warn "UYARI: '$LAUNCHER_DIR' dizini PATH değişkeninizde bulunmuyor."
             
-            shell_name=$(basename "$SHELL")
-            if [ "$shell_name" = "bash" ]; then
-                shell_rc_file="$HOME/.bashrc"
-            elif [ "$shell_name" = "zsh" ]; then
-                shell_rc_file="$HOME/.zshrc"
-            elif [ "$shell_name" = "ash" ] || [ "$shell_name" = "sh" ]; then
-                shell_rc_file="$HOME/.profile"
+            shell_name=\$(basename "\$SHELL")
+            if [ "\$shell_name" = "bash" ]; then
+                shell_rc_file="\$HOME/.bashrc"
+                rc_file_for_path="\$shell_rc_file"
+            elif [ "\$shell_name" = "zsh" ]; then
+                shell_rc_file="\$HOME/.zshrc"
+                rc_file_for_path="\$shell_rc_file"
+            elif [ "\$shell_name" = "ash" ] || [ "\$shell_name" = "sh" ]; then
+                shell_rc_file="\$HOME/.profile" # For login shells
+                rc_file_for_path="\$HOME/.shrc" # For interactive non-login shells (sourced by ENV)
             else
                 shell_rc_file=""
+                rc_file_for_path=""
             fi
 
-            if [ -n "$shell_rc_file" ]; then
-                echo_info "PATH değişkeni '$shell_rc_file' dosyasına otomatik olarak ekleniyor..."
-                local export_line="export PATH=\"
-$HOME/.local/bin:\$PATH\""
-                if ! grep -q 'export PATH="$HOME/.local/bin:$PATH"' "$shell_rc_file" 2>/dev/null; then
-                    echo "" >> "$shell_rc_file"
-                    echo "# MHRS Otomatik Randevu için PATH ayarı" >> "$shell_rc_file"
-                    echo "$export_line" >> "$shell_rc_file"
+            if [ -n "\$rc_file_for_path" ]; then
+                echo_info "PATH değişkeni '$rc_file_for_path' dosyasına otomatik olarak ekleniyor..."
+                local export_line="export PATH=\"\$HOME/.local/bin:\\$PATH\""
+                
+                # Write PATH to the designated RC file
+                if ! grep -q 'export PATH="\$HOME/.local/bin:\\$PATH"' "\$rc_file_for_path" 2>/dev/null; then
+                    echo "" >> "\$rc_file_for_path"
+                    echo "# MHRS Otomatik Randevu için PATH ayarı" >> "\$rc_file_for_path"
+                    echo "\$export_line" >> "\$rc_file_for_path"
+                    echo_success "✓ PATH ayarı '$rc_file_for_path' dosyasına yazıldı."
+                else
+                    echo_info "PATH ayarı '$rc_file_for_path' içinde zaten mevcut."
                 fi
-                echo_success "✓ PATH ayarı '$shell_rc_file' dosyasına yazıldı."
-                echo_warn "Değişikliğin etkinleşmesi için terminali yeniden başlatmanız gerekebilir."
-                if [ "$shell_name" = "ash" ] || [ "$shell_name" = "sh" ]; then
-                    echo_warn "EĞER 'mhrs' komutu yeniden başlatma sonrası çalışmazsa, aşağıdaki komutu deneyin:"
-                    echo_info "  echo 'source $HOME/.profile' >> $HOME/.ashrc"
+
+                # For ash/sh, ensure .profile sets ENV to source .shrc
+                if [ "\$shell_name" = "ash" ] || [ "\$shell_name" = "sh" ]; then
+                    if [ -n "\$shell_rc_file" ] && ! grep -q 'ENV=\\$HOME/.shrc; export ENV' "\$shell_rc_file" 2>/dev/null; then
+                        echo "" >> "\$shell_rc_file"
+                        echo "# ENV variable setup for interactive shells" >> "\$shell_rc_file"
+                        echo "ENV=\\$HOME/.shrc; export ENV" >> "\$shell_rc_file"
+                        echo_success "✓ '$shell_rc_file' dosyasına ENV değişkeni ayarı eklendi."
+                    else
+                        echo_info "'\$shell_rc_file' içinde ENV değişkeni ayarı zaten mevcut."
+                    fi
                 fi
+                echo_warn "Değişikliğin etkinleşmesi için terminali yeniden başlatmanız veya 'source \$rc_file_for_path' komutunu çalıştırmanız gerekmektedir."
             else
-                echo_error "Desteklenmeyen kabuk ($shell_name). Lütfen '$LAUNCHER_DIR' dizinini manuel olarak PATH'inize ekleyin."
+                echo_error "Desteklenmeyen kabuk (\$shell_name). Lütfen '$LAUNCHER_DIR' dizinini manuel olarak PATH'inize ekleyin."
             fi
-            ;; 
+            ;;
     esac
 }
 
