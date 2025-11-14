@@ -1,13 +1,13 @@
 #!/bin/bash
 
-# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v7.5 - Sözdizim Düzeltmesi)
-# Bu sürüm, platforma özel bağımlılık kurulumunu geri getirir ve kurulum dizininin varlığını garantiler.
+# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v7.6 - Nihai Stabil Sürüm)
+# Bu sürüm, Termux için bağımlılık kurulumunu geri getirir ve tüm platformlar için stabilite sağlar.
 
 set -e
 set -o pipefail
 
 # --- Değişkenler ---
-SCRIPT_VERSION="v7.5"
+SCRIPT_VERSION="v7.6"
 REPO="MematiBas42/MHRS-OtomatikRandevu"
 INSTALL_DIR="$HOME/mhrs_randevu"
 LATEST_RELEASE_URL="https://api.github.com/repos/$REPO/releases/latest"
@@ -50,7 +50,7 @@ get_latest_remote_version() {
 
     if [ -z "$tag_name" ]; then
         echo_error "HATA: Alınan yanıttan sürüm (tag_name) bilgisi ayıklanamadı."
-        echo "--> API Yanıtı (ilk 5 satır):" >&2
+        echo ">--> API Yanıtı (ilk 5 satır):" >&2
         echo "$api_output" | head -n 5 >&2
         echo "" && return
     fi
@@ -91,7 +91,7 @@ dotnet $APP_DLL \"\$@\""
                 fi
             fi
             
-            echo_info "--> Başlatıcı '$LAUNCHER_PATH' adresine kuruluyor (yetki: ${SUDO_CMD:-'root olarak'})..."
+            echo_info "--> Başlatıcı '$LAUNCHER_PATH' adresine kuruluyor (yetki: ${SUDO_CMD:-"root olarak"})..."
             
             local launcher_content=""
             case "$platform_identifier" in
@@ -202,7 +202,12 @@ main() {
     
     if [ -d "/data/data/com.termux" ]; then
         echo_info "Termux ortamı algılandı."
-        echo_warn "Termux üzerindeki bağımlılık kontrolü (dotnet-sdk-8.0) şu anda devre dışıdır ve manuel kurulum gerektirebilir."
+        echo_info "Gerekli Termux paketleri kontrol ediliyor/güncelleniyor..."
+        echo_warn "Bu işlem cihazınızın hızına ve internet bağlantınıza göre uzun sürebilir."
+        pkg update -y -o Dpkg::Options::=\"--force-confold\"
+        pkg upgrade -y -o Dpkg::Options::=\"--force-confold\"
+        pkg install -y dotnet-sdk-8.0
+        echo_success "✓ .NET 8 SDK ve Termux paketleri kontrol edildi."
         perform_install_or_update "termux-arm64" "MHRS-OtomatikRandevu-termux-arm64.zip"
 
     elif [ -f "/etc/alpine-release" ]; then
