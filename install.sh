@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v5.5 - Gelişmiş Ortam Düzeltmeleri)
+# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v5.6 - Termux UX İyileştirmesi)
 # Platformu ve mimariyi algılar, bağımlılıkları kurar, en son sürümü indirir,
 # ayarları korur ve evrensel bir başlatıcı betik ile PATH ayarını otomatik yapar.
 
@@ -8,7 +8,7 @@ set -e
 set -o pipefail
 
 # --- Değişkenler ---
-SCRIPT_VERSION="v5.5"
+SCRIPT_VERSION="v5.6"
 REPO="MematiBas42/MHRS-OtomatikRandevu"
 INSTALL_DIR="$HOME/mhrs_randevu"
 LAUNCHER_DIR="$HOME/.local/bin"
@@ -55,13 +55,13 @@ create_launcher() {
 # Bu betik 'install.sh' tarafından otomatik olarak oluşturulmuştur.
 cd \"$INSTALL_DIR\"
 dotnet $APP_DLL \"$@\""
-            ;;
+            ;; 
         win-*) 
             launcher_content="#!/bin/bash
 # Bu betik 'install.sh' tarafından otomatik olarak oluşturulmuştur.
 cd \"$INSTALL_DIR\"
 ./MHRS-OtomatikRandevu.exe \"$@\""
-            ;;
+            ;; 
         alpine-*) 
             launcher_content="#!/bin/sh
 # Bu betik 'install.sh' tarafından otomatik olarak oluşturulmuştur.
@@ -69,13 +69,13 @@ export COMPlus_GCServer=0
 export COMPlus_GCHeapHardLimit=0x10000000 # 256MB Heap Limiti
 cd \"$INSTALL_DIR\"
 ./MHRS-OtomatikRandevu \"$@\""
-            ;;
+            ;; 
         *) 
             launcher_content="#!/bin/bash
 # Bu betik 'install.sh' tarafından otomatik olarak oluşturulmuştur.
 cd \"$INSTALL_DIR\"
 ./MHRS-OtomatikRandevu \"$@\""
-            ;;
+            ;; 
     esac
 
     echo "$launcher_content" > "$LAUNCHER_PATH"
@@ -85,7 +85,7 @@ cd \"$INSTALL_DIR\"
     case ":$PATH:" in
         *":$LAUNCHER_DIR:"*) 
             echo_success "✓ '$LAUNCHER_DIR' dizini PATH içinde zaten mevcut."
-            ;;
+            ;; 
         *)
             echo_warn "UYARI: '$LAUNCHER_DIR' dizini PATH değişkeninizde bulunmuyor."
             
@@ -102,7 +102,8 @@ cd \"$INSTALL_DIR\"
 
             if [ -n "$shell_rc_file" ]; then
                 echo_info "PATH değişkeni '$shell_rc_file' dosyasına otomatik olarak ekleniyor..."
-                local export_line="export PATH=\"$$HOME/.local/bin:$$PATH\""
+                local export_line="export PATH=\"
+$HOME/.local/bin:\$PATH\""
                 if ! grep -q 'export PATH="$HOME/.local/bin:$PATH"' "$shell_rc_file" 2>/dev/null; then
                     echo "" >> "$shell_rc_file"
                     echo "# MHRS Otomatik Randevu için PATH ayarı" >> "$shell_rc_file"
@@ -112,12 +113,12 @@ cd \"$INSTALL_DIR\"
                 echo_warn "Değişikliğin etkinleşmesi için terminali yeniden başlatmanız gerekebilir."
                 if [ "$shell_name" = "ash" ] || [ "$shell_name" = "sh" ]; then
                     echo_warn "EĞER 'mhrs' komutu yeniden başlatma sonrası çalışmazsa, aşağıdaki komutu deneyin:"
-                    echo_info "  echo 'source $$HOME/.profile' >> $$HOME/.ashrc"
+                    echo_info "  echo 'source $HOME/.profile' >> $HOME/.ashrc"
                 fi
             else
                 echo_error "Desteklenmeyen kabuk ($shell_name). Lütfen '$LAUNCHER_DIR' dizinini manuel olarak PATH'inize ekleyin."
             fi
-            ;;
+            ;; 
     esac
 }
 
@@ -204,11 +205,14 @@ main() {
     
     if [ -d "/data/data/com.termux" ]; then
         echo_info "Termux ortamı algılandı."
-        echo_info "Gerekli Termux paketleri kontrol ediliyor/kuruluyor..."
-        DEBIAN_FRONTEND=noninteractive pkg update -y -o Dpkg::Options::=\"--force-confold\" >/dev/null
-        DEBIAN_FRONTEND=noninteractive pkg upgrade -y -o Dpkg::Options::=\"--force-confold\" >/dev/null
-        pkg install -y dotnet-sdk-8.0 >/dev/null
-        echo_success "✓ .NET 8 SDK kontrolü tamamlandı."
+        echo_info "Gerekli Termux paketleri kontrol ediliyor/güncelleniyor..."
+        echo_warn "Bu işlem cihazınızın hızına ve internet bağlantınıza göre uzun sürebilir."
+        
+        DEBIAN_FRONTEND=noninteractive pkg update -y -o Dpkg::Options::=\"--force-confold\"
+        DEBIAN_FRONTEND=noninteractive pkg upgrade -y -o Dpkg::Options::=\"--force-confold\"
+        pkg install -y dotnet-sdk-8.0
+
+        echo_success "✓ .NET 8 SDK ve Termux paketleri kontrol edildi."
 
         if [ "$ARCH_TYPE" = "aarch64" ]; then
             echo_info "Mimari: arm64"
@@ -265,7 +269,7 @@ main() {
                 echo_error "Desteklenmeyen Linux Mimarisi: $ARCH_TYPE. Sadece x86_64 desteklenmektedir."
                 exit 1
             fi
-            ;;
+            ;; 
         CYGWIN*|MINGW*|MSYS*) 
             echo_info "Windows (WSL/Git Bash) ortamı algılandı."
             if [ "$ARCH_TYPE" = "x86_64" ]; then
@@ -278,11 +282,11 @@ main() {
                 echo_error "Desteklenmeyen Windows Mimarisi: $ARCH_TYPE."
                 exit 1
             fi
-            ;;
+            ;; 
         *)
             echo_error "Desteklenmeyen İşletim Sistemi: $OS_TYPE"
             exit 1
-            ;;
+            ;; 
     esac
 }
 
