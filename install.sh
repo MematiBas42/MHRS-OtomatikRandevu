@@ -90,7 +90,7 @@ cd \"$INSTALL_DIR\"
             echo_warn "UYARI: '$LAUNCHER_DIR' dizini PATH değişkeninizde bulunmuyor."
             
             shell_name=$(basename "$SHELL")
-            local export_line="export PATH=\"$$HOME/.local/bin:$$PATH\""
+            local export_line="export PATH=\"\$HOME/.local/bin:\$PATH\""
             
             if [ "$shell_name" = "bash" ]; then
                 files_to_try=("$HOME/.bashrc")
