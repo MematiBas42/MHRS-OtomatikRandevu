@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v5.6 - Gelişmiş Ortam Düzeltmeleri)
+# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v5.7 - PATH Düzeltmesi)
 # Platformu ve mimariyi algılar, bağımlılıkları kurar, en son sürümü indirir,
 # ayarları korur ve evrensel bir başlatıcı betik ile PATH ayarını otomatik yapar.
 
@@ -8,7 +8,7 @@ set -e
 set -o pipefail
 
 # --- Değişkenler ---
-SCRIPT_VERSION="v5.6"
+SCRIPT_VERSION="v5.7"
 REPO="MematiBas42/MHRS-OtomatikRandevu"
 INSTALL_DIR="$HOME/mhrs_randevu"
 LAUNCHER_DIR="$HOME/.local/bin"
@@ -83,55 +83,39 @@ cd \"$INSTALL_DIR\"
     echo_success "✓ Başlatıcı betik '$LAUNCHER_PATH' adresinde oluşturuldu."
 
     case ":$PATH:" in
-        *:") 
+        *:":$LAUNCHER_DIR:"*) 
             echo_success "✓ '$LAUNCHER_DIR' dizini PATH içinde zaten mevcut."
             ;; 
         *)
             echo_warn "UYARI: '$LAUNCHER_DIR' dizini PATH değişkeninizde bulunmuyor."
             
-            shell_name=\$(basename "\$SHELL")
-            if [ "\$shell_name" = "bash" ]; then
-                shell_rc_file="\$HOME/.bashrc"
-                rc_file_for_path="\$shell_rc_file"
-            elif [ "\$shell_name" = "zsh" ]; then
-                shell_rc_file="\$HOME/.zshrc"
-                rc_file_for_path="\$shell_rc_file"
-            elif [ "\$shell_name" = "ash" ] || [ "\$shell_name" = "sh" ]; then
-                shell_rc_file="\$HOME/.profile" # For login shells
-                rc_file_for_path="\$HOME/.shrc" # For interactive non-login shells (sourced by ENV)
+            shell_name=$(basename "$SHELL")
+            local export_line="export PATH=\"$$HOME/.local/bin:$$PATH\""
+            
+            if [ "$shell_name" = "bash" ]; then
+                files_to_try=("$HOME/.bashrc")
+            elif [ "$shell_name" = "zsh" ]; then
+                files_to_try=("$HOME/.zshrc")
+            elif [ "$shell_name" = "ash" ] || [ "$shell_name" = "sh" ]; then
+                # Brute-force for ash/sh by writing to all common files
+                files_to_try=("$HOME/.profile" "$HOME/.ashrc" "$HOME/.shrc")
             else
-                shell_rc_file=""
-                rc_file_for_path=""
+                files_to_try=()
             fi
 
-            if [ -n "\$rc_file_for_path" ]; then
-                echo_info "PATH değişkeni '$rc_file_for_path' dosyasına otomatik olarak ekleniyor..."
-                local export_line="export PATH=\"\$HOME/.local/bin:\\$PATH\""
-                
-                # Write PATH to the designated RC file
-                if ! grep -q 'export PATH="\$HOME/.local/bin:\\$PATH"' "\$rc_file_for_path" 2>/dev/null; then
-                    echo "" >> "\$rc_file_for_path"
-                    echo "# MHRS Otomatik Randevu için PATH ayarı" >> "\$rc_file_for_path"
-                    echo "\$export_line" >> "\$rc_file_for_path"
-                    echo_success "✓ PATH ayarı '$rc_file_for_path' dosyasına yazıldı."
-                else
-                    echo_info "PATH ayarı '$rc_file_for_path' içinde zaten mevcut."
-                fi
-
-                # For ash/sh, ensure .profile sets ENV to source .shrc
-                if [ "\$shell_name" = "ash" ] || [ "\$shell_name" = "sh" ]; then
-                    if [ -n "\$shell_rc_file" ] && ! grep -q 'ENV=\\$HOME/.shrc; export ENV' "\$shell_rc_file" 2>/dev/null; then
-                        echo "" >> "\$shell_rc_file"
-                        echo "# ENV variable setup for interactive shells" >> "\$shell_rc_file"
-                        echo "ENV=\\$HOME/.shrc; export ENV" >> "\$shell_rc_file"
-                        echo_success "✓ '$shell_rc_file' dosyasına ENV değişkeni ayarı eklendi."
-                    else
-                        echo_info "'\$shell_rc_file' içinde ENV değişkeni ayarı zaten mevcut."
+            if [ ${#files_to_try[@]} -gt 0 ]; then
+                echo_info "PATH değişkeni şu dosyalara yazılıyor: ${files_to_try[*]}"
+                for rc_file in "${files_to_try[@]}"; do
+                    if ! grep -q 'export PATH="$HOME/.local/bin:$PATH"' "$rc_file" 2>/dev/null; then
+                        echo "" >> "$rc_file"
+                        echo "# MHRS Otomatik Randevu için PATH ayarı" >> "$rc_file"
+                        echo "$export_line" >> "$rc_file"
                     fi
-                fi
-                echo_warn "Değişikliğin etkinleşmesi için terminali yeniden başlatmanız veya 'source \$rc_file_for_path' komutunu çalıştırmanız gerekmektedir."
+                done
+                echo_success "✓ PATH ayarları ilgili yapılandırma dosyalarına yazıldı."
+                echo_warn "Değişikliğin etkinleşmesi için terminalinizi yeniden başlatmanız gerekmektedir."
             else
-                echo_error "Desteklenmeyen kabuk (\$shell_name). Lütfen '$LAUNCHER_DIR' dizinini manuel olarak PATH'inize ekleyin."
+                echo_error "Desteklenmeyen kabuk ($shell_name). Lütfen '$LAUNCHER_DIR' dizinini manuel olarak PATH'inize ekleyin."
             fi
             ;;
     esac
@@ -269,11 +253,14 @@ main() {
                 if ! command -v sudo >/dev/null 2>&1; then
                     echo_error "'sudo' komutu bulunamadı. Lütfen bağımlılıkları manuel kurun: libicu, libssl"
                 else
-                    if command -v apt-get >/dev/null 2>&1; then
+                    if command -v apt-get >/dev/null 2>&1;
+                        then
                         sudo apt-get install -y libicu-dev libssl-dev > /dev/null
-                    elif command -v dnf >/dev/null 2>&1; then
+                    elif command -v dnf >/dev/null 2>&1;
+                        then
                         sudo dnf install -y libicu libssl > /dev/null
-                    elif command -v pacman >/dev/null 2>&1; then
+                    elif command -v pacman >/dev/null 2>&1;
+                        then
                         (sudo pacman -S --needed --noconfirm icu || echo_warn "UYARI: 'icu' paketi kurulamadı. Sisteminizi 'sudo pacman -Syu' ile güncellemeniz gerekebilir.")
                         (sudo pacman -S --needed --noconfirm openssl || echo_warn "UYARI: 'openssl' paketi kurulamadı.")
                     fi
