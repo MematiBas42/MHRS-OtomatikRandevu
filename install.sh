@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v4 - Gelişmiş Kullanıcı Deneyimi)
+# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v4.1 - Nihai)
 # Platformu algılar, bağımlılıkları kurar, en son sürümü indirir,
-# ayarları korur ve evrensel bir başlatıcı betik oluşturur.
+# ayarları korur ve evrensel bir başlatıcı betik ile PATH ayarını otomatik yapar.
 
 set -e
 set -o pipefail
@@ -45,8 +45,9 @@ create_launcher() {
     local platform_type="$1"
     local launcher_content
     local shell_rc_file
+    local export_line="export PATH=\"$HOME/.local/bin:$PATH\""
 
-    echo_info "\n--- Aşama 4: 'mhrs' Komutu Oluşturuluyor ---"
+    echo_info "\n--- Aşama 4: 'mhrs' Komutu Yapılandırılıyor ---"
     mkdir -p "$LAUNCHER_DIR"
 
     # Platforma özel başlatıcı içeriğini belirle
@@ -55,12 +56,7 @@ create_launcher() {
 # Bu betik 'install.sh' tarafından otomatik olarak oluşturulmuştur.
 cd \"$INSTALL_DIR\"
 dotnet $APP_DLL \"$@\""
-    elif [ "$platform_type" = "windows" ]; then
-        launcher_content="#!/bin/bash
-# Bu betik 'install.sh' tarafından otomatik olarak oluşturulmuştur.
-cd \"$INSTALL_DIR\"
-./MHRS-OtomatikRandevu.exe \"$@\""
-    else # linux
+    else # linux veya windows (WSL/Git Bash)
         launcher_content="#!/bin/bash
 # Bu betik 'install.sh' tarafından otomatik olarak oluşturulmuştur.
 cd \"$INSTALL_DIR\"
@@ -89,19 +85,20 @@ cd \"$INSTALL_DIR\"
                 shell_rc_file=""
             fi
 
-            if [ -n "$shell_rc_file" ] && [ -f "$shell_rc_file" ]; then
+            if [ -n "$shell_rc_file" ]; then
                 echo_info "PATH değişkeni '$shell_rc_file' dosyasına otomatik olarak ekleniyor..."
-                if ! grep -q "export PATH=\"\$HOME/.local/bin:\\$PATH\"" "$shell_rc_file"; then
+                # Dosya yoksa bile oluşturur ve mükerrer eklemeyi önler
+                if ! grep -q 'export PATH="$HOME/.local/bin:$PATH"' "$shell_rc_file" 2>/dev/null; then
                     echo "" >> "$shell_rc_file"
                     echo "# MHRS Otomatik Randevu için PATH ayarı" >> "$shell_rc_file"
-                    echo "export PATH=\"\$HOME/.local/bin:\\$PATH\"" >> "$shell_rc_file"
+                    echo "$export_line" >> "$shell_rc_file"
                     echo_success "✓ PATH ayarı eklendi."
                     echo_warn "Değişikliğin etkinleşmesi için terminalinizi yeniden başlatmanız gerekmektedir."
                 else
                     echo_info "PATH ayarı '$shell_rc_file' içinde zaten mevcut."
                 fi
             else
-                echo_error "Desteklenmeyen kabuk. Lütfen '$LAUNCHER_DIR' dizinini manuel olarak PATH'inize ekleyin."
+                echo_error "Desteklenmeyen kabuk. Lütfen '$LAUNCHER_DIR' dizinini manuel olarak PATH'inize ekleyin: $export_line"
             fi
             ;;
     esac
@@ -194,8 +191,8 @@ main() {
         echo_info "Termux ortamı algılandı."
         if ! command -v dotnet >/dev/null 2>&1; then
                 echo_warn ".NET 8 SDK'sı bulunamadı. Kuruluyor..."
-                DEBIAN_FRONTEND=noninteractive pkg update -y -o Dpkg::Options::=\"--force-confold\" >/dev/null
-                DEBIAN_FRONTEND=noninteractive pkg upgrade -y -o Dpkg::Options::=\"--force-confold\" >/dev/null
+                DEBIAN_FRONTEND=noninteractive pkg update -y -o Dpkg::Options::="--force-confold" >/dev/null
+                DEBIAN_FRONTEND=noninteractive pkg upgrade -y -o Dpkg::Options::="--force-confold" >/dev/null
                 pkg install -y curl unzip git dotnet-sdk-8.0 >/dev/null
                 echo_success "✓ Gerekli Termux bağımlılıkları kuruldu."
         else
