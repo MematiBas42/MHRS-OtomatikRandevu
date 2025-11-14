@@ -251,7 +251,8 @@ main() {
                     elif command -v dnf >/dev/null 2>&1; then
                         sudo dnf install -y libicu libssl > /dev/null
                     elif command -v pacman >/dev/null 2>&1; then
-                        sudo pacman -S --needed --noconfirm icu openssl > /dev/null
+                        sudo pacman -S --needed --noconfirm icu
+                        sudo pacman -S --needed --noconfirm openssl
                     fi
                 fi
                 echo_success "✓ Gerekli Linux bağımlılıkları kontrol edildi."
