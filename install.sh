@@ -207,8 +207,9 @@ main() {
         echo_info "Termux ortamı algılandı."
         echo_info "Gerekli Termux paketleri kontrol ediliyor/güncelleniyor..."
         echo_warn "Bu işlem cihazınızın hızına ve internet bağlantınıza göre uzun sürebilir."
-        pkg update -y -o Dpkg::Options::=\"--force-confold\"
-        pkg upgrade -y -o Dpkg::Options::=\"--force-confold\"
+        export DEBIAN_FRONTEND=noninteractive
+        pkg update -y
+        pkg upgrade -y -o Dpkg::Options::="--force-confold"
         pkg install -y dotnet-sdk-8.0
         echo_success "✓ .NET 8 SDK ve Termux paketleri kontrol edildi."
         perform_install_or_update "termux-arm64" "MHRS-OtomatikRandevu-termux-arm64.zip"
@@ -217,7 +218,7 @@ main() {
         echo_info "Alpine Linux ortamı algılandı."
         if [ "$ARCH_TYPE" = "aarch64" ]; then
              echo_info "Gerekli Alpine paketleri kontrol ediliyor/kuruluyor..."
-             sudo apk add --no-cache icu-libs openssl lttng-ust
+             apk add --no-cache icu-libs openssl lttng-ust
              echo_success "✓ Gerekli Alpine bağımlılıkları kontrol edildi."
              perform_install_or_update "alpine-arm64" "MHRS-OtomatikRandevu-alpine-arm64.zip"
         else
