@@ -36,9 +36,11 @@ Uygulama, interaktif bir şekilde sizden İl, İlçe, Klinik, Hastane gibi bilgi
 
 ---
 
-### 🐧 Linux  &  📱 [ReTerminal](https://github.com/RohitKushvaha01/ReTerminal) (öneriliyor!!) / Termux 
+### 🐧 Linux 
+💻 & 📱 [ReTerminal](https://github.com/RohitKushvaha01/ReTerminal) (öneriliyor!!) / Termux 
 
 🎯 Tek Komutla Kurulum 
+
 Aşağıdaki komutu terminalinize yapıştırıp çalıştırın. Bu betik, sizin için en son sürümü indirip kuracak ve uygulamayı başlatacaktır.
 
 ```bash
