@@ -1,13 +1,13 @@
 #!/bin/bash
 
-# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v7.3 - Nihai Stabil Sürüm)
-# Bu sürüm, platforma özel bağımlılık kurulumunu geri getirir ve kurulum dizininin varlığını garantiler.
+# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v7.4 - Sudo Optimizasyonu)
+# Bu sürüm, Termux ve diğer Linux sistemleri için farklı kurulum mantıkları kullanır ve root kullanıcısı için sudo kullanımını optimize eder.
 
 set -e
 set -o pipefail
 
 # --- Değişkenler ---
-SCRIPT_VERSION="v7.3"
+SCRIPT_VERSION="v7.4"
 REPO="MematiBas42/MHRS-OtomatikRandevu"
 INSTALL_DIR="$HOME/mhrs_randevu"
 LATEST_RELEASE_URL="https://api.github.com/repos/$REPO/releases/latest"
@@ -67,7 +67,8 @@ create_launcher() {
         termux-*) 
             local LAUNCHER_DIR="$PREFIX/bin"
             local LAUNCHER_PATH="$LAUNCHER_DIR/mhrs"
-            local launcher_content="#!/bin/bash\ncd \"$INSTALL_DIR\"\ndotnet $APP_DLL \"\$@\""
+            local launcher_content="#!/bin/bash\ncd \"$INSTALL_DIR\"
+dotnet $APP_DLL \"\$@\""
             
             echo_info "--> Termux için başlatıcı '$LAUNCHER_PATH' adresine kuruluyor..."
             
@@ -82,8 +83,7 @@ create_launcher() {
             local LAUNCHER_DIR="/usr/local/bin"
             local LAUNCHER_PATH="$LAUNCHER_DIR/mhrs"
             
-            echo_info "--> Başlatıcı '$LAUNCHER_PATH' adresine kuruluyor (root yetkisi gerekebilir)...
-"
+            echo_info "--> Başlatıcı '$LAUNCHER_PATH' adresine kuruluyor (root yetkisi gerekebilir).\n"
 
             if ! command -v sudo >/dev/null 2>&1 && [ "$(id -u)" -ne 0 ]; then
                 echo_error "HATA: Bu betiğin başlatıcıyı kurması için 'root' yetkisi veya 'sudo' komutu gereklidir."
@@ -156,7 +156,7 @@ perform_install_or_update() {
     fi
     mkdir -p "$INSTALL_DIR"
 
-    DOWNLOAD_URL=$(curl -sL "$LATEST_RELEASE_URL" | grep "browser_download_url.*$asset_zip_name" | cut -d '"' -f 4 || true)
+    DOWNLOAD_URL=$(curl -sL "$LATEST_RELEASE_URL" | grep 'browser_download_url.*$asset_zip_name' | cut -d '"' -f 4 || true)
     if [ -z "$DOWNLOAD_URL" ]; then
         echo_error "HATA: '$asset_zip_name' için indirme URL'si bulunamadı."
         exit 1
@@ -227,7 +227,7 @@ main() {
                 sudo apt-get install -y libicu-dev libssl-dev > /dev/null
             elif command -v dnf >/dev/null 2>&1; then
                 sudo dnf install -y libicu libssl-devel > /dev/null
-            elif command -v pacman >/dev/null 2>&1; then
+            elif command -v pacman >/dev/null 2>&1;
                 (sudo pacman -S --needed --noconfirm icu openssl || echo_warn "UYARI: Bağımlılıklar kurulamadı. 'sudo pacman -Syu' ile sistemi güncelleyin.")
             fi
              echo_success "✓ Gerekli Linux bağımlılıkları kontrol edildi."
