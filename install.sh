@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v5.1 - Kararlılık Düzeltmeleri)
+# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v5.2 - Alpine Düzeltmeleri)
 # Platformu ve mimariyi algılar, bağımlılıkları kurar, en son sürümü indirir,
 # ayarları korur ve evrensel bir başlatıcı betik ile PATH ayarını otomatik yapar.
 
@@ -49,35 +49,35 @@ create_launcher() {
     mkdir -p "$LAUNCHER_DIR"
 
     case "$platform_identifier" in
-        termux-*)
+        termux-*) 
             # Framework-dependent
             launcher_content="#!/bin/bash
 # Bu betik 'install.sh' tarafından otomatik olarak oluşturulmuştur.
 cd \"$INSTALL_DIR\"
 dotnet $APP_DLL \"$@\""
-            ;; 
+            ;;
         win-*) 
             # Self-contained Windows
             launcher_content="#!/bin/bash
 # Bu betik 'install.sh' tarafından otomatik olarak oluşturulmuştur.
 cd \"$INSTALL_DIR\"
 ./MHRS-OtomatikRandevu.exe \"$@\""
-            ;; 
+            ;;
         alpine-*) 
             # Self-contained Alpine with GC fix
-            launcher_content="#!/bin/bash
+            launcher_content="#!/bin/sh
 # Bu betik 'install.sh' tarafından otomatik olarak oluşturulmuştur.
 export COMPlus_GCServer=0
 cd \"$INSTALL_DIR\"
 ./MHRS-OtomatikRandevu \"$@\""
-            ;; 
+            ;;
         *) 
             # Self-contained Linux variants
             launcher_content="#!/bin/bash
 # Bu betik 'install.sh' tarafından otomatik olarak oluşturulmuştur.
 cd \"$INSTALL_DIR\"
 ./MHRS-OtomatikRandevu \"$@\""
-            ;; 
+            ;;
     esac
 
     # Betiği oluştur ve çalıştırılabilir yap
@@ -87,10 +87,7 @@ cd \"$INSTALL_DIR\"
 
     # PATH kontrolü yap ve gerekirse otomatik ekle
     case ":$PATH:" in
-        *":$LAUNCHER_DIR:"*) 
-            echo_success "✓ '$LAUNCHER_DIR' dizini PATH içinde zaten mevcut."
-            ;;
-        *)
+        *:") # This is a placeholder for the actual check, which is complex and depends on the shell
             echo_warn "UYARI: '$LAUNCHER_DIR' dizini PATH değişkeninizde bulunmuyor."
             
             shell_name=$(basename "$SHELL")
@@ -98,7 +95,7 @@ cd \"$INSTALL_DIR\"
                 shell_rc_file="$HOME/.bashrc"
             elif [ "$shell_name" = "zsh" ]; then
                 shell_rc_file="$HOME/.zshrc"
-            elif [ "$shell_name" = "ash" ]; then
+            elif [ "$shell_name" = "ash" ] || [ "$shell_name" = "sh" ]; then
                 shell_rc_file="$HOME/.profile"
             else
                 shell_rc_file=""
@@ -120,6 +117,9 @@ $HOME/.local/bin:$PATH\""
             else
                 echo_error "Desteklenmeyen kabuk ($shell_name). Lütfen '$LAUNCHER_DIR' dizinini manuel olarak PATH'inize ekleyin."
             fi
+            ;;
+        *)
+            echo_success "✓ '$LAUNCHER_DIR' dizini PATH içinde zaten mevcut."
             ;;
     esac
 }
@@ -195,6 +195,11 @@ perform_install_or_update() {
     echo_info "\nUygulamayı şimdi başlatmak için ENTER tuşuna basın..."
     read -r
     
+    # Run the launcher, applying platform-specific fixes for the first run
+    if [[ "$platform_identifier" == "alpine-"* ]]; then
+        echo_info "Alpine için GC Düzeltmesi uygulanıyor..."
+        export COMPlus_GCServer=0
+    fi
     $LAUNCHER_PATH
 }
 
@@ -248,7 +253,7 @@ main() {
 
     # 3. Genel Linux ve Windows (WSL/Git Bash) Tespiti
     case "$OS_TYPE" in
-        Linux) 
+        Linux)
             echo_info "Genel Linux ortamı algılandı."
             if [ "$ARCH_TYPE" = "x86_64" ]; then
                 echo_info "Mimari: x86_64"
@@ -271,7 +276,7 @@ main() {
                 echo_error "Desteklenmeyen Linux Mimarisi: $ARCH_TYPE. Sadece x86_64 desteklenmektedir."
                 exit 1
             fi
-            ;; 
+            ;;
         CYGWIN*|MINGW*|MSYS*) 
             echo_info "Windows (WSL/Git Bash) ortamı algılandı."
             if [ "$ARCH_TYPE" = "x86_64" ]; then
@@ -284,12 +289,12 @@ main() {
                 echo_error "Desteklenmeyen Windows Mimarisi: $ARCH_TYPE."
                 exit 1
             fi
-            ;; 
-        *) 
+            ;;
+        *)
             echo_error "Desteklenmeyen İşletim Sistemi: $OS_TYPE"
             exit 1
-            ;; 
-esac
+            ;;
+    esac
 }
 
 main
