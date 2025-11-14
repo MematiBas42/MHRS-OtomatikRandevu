@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v4.2 - Son Rötuşlar)
-# Platformu algılar, bağımlılıkları kurar, en son sürümü indirir,
+# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v5.0 - Çoklu Platform)
+# Platformu ve mimariyi algılar, bağımlılıkları kurar, en son sürümü indirir,
 # ayarları korur ve evrensel bir başlatıcı betik ile PATH ayarını otomatik yapar.
 
 set -e
@@ -42,27 +42,35 @@ get_latest_remote_version() {
 }
 
 create_launcher() {
-    local platform_type="$1"
+    local platform_identifier="$1" # e.g., 'win-x64', 'termux-arm'
     local launcher_content
-    local shell_rc_file
-    local export_line="export PATH=\"
-$HOME/.local/bin:$PATH\""
 
     echo_info "\n--- Aşama 4: 'mhrs' Komutu Yapılandırılıyor ---"
     mkdir -p "$LAUNCHER_DIR"
 
-    # Platforma özel başlatıcı içeriğini belirle
-    if [ "$platform_type" = "termux" ]; then
-        launcher_content="#!/bin/bash
+    case "$platform_identifier" in
+        termux-*)
+            # Framework-dependent
+            launcher_content="#!/bin/bash
 # Bu betik 'install.sh' tarafından otomatik olarak oluşturulmuştur.
 cd \"$INSTALL_DIR\"
 dotnet $APP_DLL \"$@\""
-    else # linux veya windows (WSL/Git Bash)
-        launcher_content="#!/bin/bash
+            ;;
+        win-*) 
+            # Self-contained Windows
+            launcher_content="#!/bin/bash
+# Bu betik 'install.sh' tarafından otomatik olarak oluşturulmuştur.
+cd \"$INSTALL_DIR\"
+./MHRS-OtomatikRandevu.exe \"$@\""
+            ;;
+        *) 
+            # Self-contained Linux variants
+            launcher_content="#!/bin/bash
 # Bu betik 'install.sh' tarafından otomatik olarak oluşturulmuştur.
 cd \"$INSTALL_DIR\"
 ./MHRS-OtomatikRandevu \"$@\""
-    fi
+            ;;
+    esac
 
     # Betiği oluştur ve çalıştırılabilir yap
     echo "$launcher_content" > "$LAUNCHER_PATH"
@@ -71,7 +79,7 @@ cd \"$INSTALL_DIR\"
 
     # PATH kontrolü yap ve gerekirse otomatik ekle
     case ":$PATH:" in
-        *":$LAUNCHER_DIR:"*)
+        *":$LAUNCHER_DIR:"*) 
             echo_success "✓ '$LAUNCHER_DIR' dizini PATH içinde zaten mevcut."
             ;;
         *)
@@ -88,6 +96,8 @@ cd \"$INSTALL_DIR\"
 
             if [ -n "$shell_rc_file" ]; then
                 echo_info "PATH değişkeni '$shell_rc_file' dosyasına otomatik olarak ekleniyor..."
+                local export_line="export PATH=\"
+$HOME/.local/bin:$PATH\""
                 if ! grep -q 'export PATH="$HOME/.local/bin:$PATH"' "$shell_rc_file" 2>/dev/null; then
                     echo "" >> "$shell_rc_file"
                     echo "# MHRS Otomatik Randevu için PATH ayarı" >> "$shell_rc_file"
@@ -98,17 +108,15 @@ cd \"$INSTALL_DIR\"
                     echo_info "PATH ayarı '$shell_rc_file' içinde zaten mevcut."
                 fi
             else
-                echo_error "Desteklenmeyen kabuk. Lütfen '$LAUNCHER_DIR' dizinini manuel olarak PATH'inize ekleyin: $export_line"
+                echo_error "Desteklenmeyen kabuk. Lütfen '$LAUNCHER_DIR' dizinini manuel olarak PATH'inize ekleyin."
             fi
             ;;
     esac
 }
 
 perform_install_or_update() {
-    local platform_type="$1"
+    local platform_identifier="$1"
     local asset_zip_name="$2"
-    local is_first_install=false
-    local local_version=""
 
     echo_info "\n--- Aşama 3: Kurulum ve Güncelleme ---"
 
@@ -119,127 +127,158 @@ perform_install_or_update() {
     fi
 
     if [ ! -d "$INSTALL_DIR" ] || [ ! -f "$VERSION_FILE" ]; then
-        is_first_install=true
         echo_info "İlk kurulum algılandı."
     else
         local_version=$(cat "$VERSION_FILE")
+        if [ "$local_version" = "$remote_version" ]; then
+            echo_success "✓ Uygulama zaten güncel (Sürüm: ${local_version})."
+            create_launcher "$platform_identifier"
+            echo_info "\n--- Kurulum Atlandı ---"
+            echo_info "Uygulama zaten güncel olduğu için tekrar indirilmedi."
+            echo_success "✓ 'mhrs' komutu ve PATH ayarları kontrol edildi."
+            echo_info "Güncelleme kontrolü için bu betiği dilediğiniz zaman yeniden çalıştırabilirsiniz."
+            return 0 # Exit the function
+        fi
     fi
 
-    if [ "$local_version" = "$remote_version" ]; then
-        echo_success "✓ Uygulama zaten güncel (Sürüm: ${local_version})."
-    else
-        echo_info "Yeni sürüm bulundu: $remote_version. Kurulum/Güncelleme yapılıyor..."
+    echo_info "Yeni sürüm bulundu: $remote_version. Kurulum/Güncelleme yapılıyor..."
 
-        local temp_backup_dir
-        temp_backup_dir=$(mktemp -d)
+    local temp_backup_dir
+    temp_backup_dir=$(mktemp -d)
 
-        if [ -d "$INSTALL_DIR" ]; then
-            echo_info "Eski dosyalar yedekleniyor..."
-            find "$INSTALL_DIR" -name "$CONFIG_FILE" -exec cp {} "$temp_backup_dir/" \;
-            find "$INSTALL_DIR" -name "$TOKEN_PATTERN" -exec cp {} "$temp_backup_dir/" \;
-            rm -rf "$INSTALL_DIR"
-        fi
-        mkdir -p "$INSTALL_DIR"
+    if [ -d "$INSTALL_DIR" ]; then
+        echo_info "Eski ayarlar yedekleniyor..."
+        find "$INSTALL_DIR" -name "$CONFIG_FILE" -exec cp {} "$temp_backup_dir/" \;
+        find "$INSTALL_DIR" -name "$TOKEN_PATTERN" -exec cp {} "$temp_backup_dir/" \;
+        rm -rf "$INSTALL_DIR"
+    fi
+    mkdir -p "$INSTALL_DIR"
 
-        DOWNLOAD_URL=$(curl -s "$LATEST_RELEASE_URL" | grep "browser_download_url.*$asset_zip_name" | cut -d '"' -f 4)
-        if [ -z "$DOWNLOAD_URL" ]; then
-            echo_error "HATA: $asset_zip_name için indirme URL'si bulunamadı."
-            exit 1
-        fi
-
-        echo_info "Uygulama dosyaları indiriliyor..."
-        curl -L -o "$INSTALL_DIR/$asset_zip_name" "$DOWNLOAD_URL"
-
-        echo_info "Dosyalar arşivden (sessiz modda) çıkarılıyor..."
-        unzip -oq "$INSTALL_DIR/$asset_zip_name" -d "$INSTALL_DIR"
-        rm "$INSTALL_DIR/$asset_zip_name"
-
-        if [ -d "$temp_backup_dir" ] && [ "$(ls -A "$temp_backup_dir")" ]; then
-            echo_info "Eski ayarlar ve token dosyaları geri yükleniyor..."
-            find "$temp_backup_dir" -name "$CONFIG_FILE" -exec mv {} "$INSTALL_DIR/" \;
-            find "$temp_backup_dir" -name "$TOKEN_PATTERN" -exec mv {} "$INSTALL_DIR/" \;
-        fi
-        rm -rf "$temp_backup_dir"
-
-        echo "$remote_version" > "$VERSION_FILE"
-        echo_success "✓ Kurulum/Güncelleme başarıyla tamamlandı! (Sürüm: $remote_version)"
+    DOWNLOAD_URL=$(curl -s "$LATEST_RELEASE_URL" | grep "browser_download_url.*$asset_zip_name" | cut -d '"' -f 4)
+    if [ -z "$DOWNLOAD_URL" ]; then
+        echo_error "HATA: $asset_zip_name için indirme URL'si bulunamadı."
+        exit 1
     fi
 
-    create_launcher "$platform_type"
+    echo_info "Uygulama dosyaları indiriliyor..."
+    curl -L -o "$INSTALL_DIR/$asset_zip_name" "$DOWNLOAD_URL"
+
+    echo_info "Dosyalar arşivden (sessiz modda) çıkarılıyor..."
+    unzip -oq "$INSTALL_DIR/$asset_zip_name" -d "$INSTALL_DIR"
+    rm "$INSTALL_DIR/$asset_zip_name"
+
+    if [ -d "$temp_backup_dir" ] && [ "$(ls -A "$temp_backup_dir")" ]; then
+        echo_info "Eski ayarlar ve token dosyaları geri yükleniyor..."
+        find "$temp_backup_dir" -name "$CONFIG_FILE" -exec mv {} "$INSTALL_DIR/" \;
+        find "$temp_backup_dir" -name "$TOKEN_PATTERN" -exec mv {} "$INSTALL_DIR/" \;
+    fi
+    rm -rf "$temp_backup_dir"
+
+    echo "$remote_version" > "$VERSION_FILE"
+    echo_success "✓ Kurulum/Güncelleme başarıyla tamamlandı! (Sürüm: $remote_version)"
+
+    create_launcher "$platform_identifier"
 
     echo_info "\n--- Kurulum Tamamlandı ---"
     echo_success "✓ Sonraki sefer 'mhrs' yazarak uygulamayı direkt çalıştırabilirsiniz."
     echo_info "i Güncelleme kontrolü için bu kurulum betiğini yeniden çalıştırmanız yeterlidir."
     echo_info "\nUygulamayı şimdi başlatmak için ENTER tuşuna basın..."
     read -r
-
-    echo_info "Uygulama ilk kez çalıştırılıyor..."
-    cd "$INSTALL_DIR"
-    if [ "$platform_type" = "termux" ]; then
-        dotnet $APP_DLL
-    elif [ "$platform_type" = "windows" ]; then
-        ./MHRS-OtomatikRandevu.exe
-    else # linux
-        ./MHRS-OtomatikRandevu
-    fi
+    
+    $LAUNCHER_PATH
 }
 
 main() {
     check_common_deps
-
-    echo_info "\n--- Aşama 2: Platform ve Bağımlılıklar ---"
-
+    echo_info "\n--- Aşama 2: Platform ve Bağımlılıklar Algılanıyor ---"
+    
+    OS_TYPE=$(uname -s)
+    ARCH_TYPE=$(uname -m)
+    
+    # 1. Termux Tespiti
     if [ -d "/data/data/com.termux" ]; then
         echo_info "Termux ortamı algılandı."
-        if ! command -v dotnet >/dev/null 2>&1; then
-                echo_warn ".NET 8 SDK'sı bulunamadı. Kuruluyor..."
-                DEBIAN_FRONTEND=noninteractive pkg update -y -o Dpkg::Options::=\"--force-confold\" >/dev/null
-                DEBIAN_FRONTEND=noninteractive pkg upgrade -y -o Dpkg::Options::=\"--force-confold\" >/dev/null
-                pkg install -y curl unzip git dotnet-sdk-8.0 >/dev/null
-                echo_success "✓ Gerekli Termux bağımlılıkları kuruldu."
-        else
-            echo_success "✓ .NET 8 SDK zaten kurulu."
-        fi
-        perform_install_or_update "termux" "MHRS-OtomatikRandevu-termux-arm64.zip"
-    else
-        OS_TYPE=$(uname -s)
-        ARCH_TYPE=$(uname -m)
+        echo_info "Gerekli Termux paketleri kontrol ediliyor/kuruluyor..."
+        DEBIAN_FRONTEND=noninteractive pkg update -y -o Dpkg::Options::=\"--force-confold\" >/dev/null
+        DEBIAN_FRONTEND=noninteractive pkg upgrade -y -o Dpkg::Options::=\"--force-confold\" >/dev/null
+        pkg install -y dotnet-sdk-8.0 >/dev/null
+        echo_success "✓ .NET 8 SDK kontrolü tamamlandı."
 
-        case "$OS_TYPE" in
-            Linux)
-                if [ "$ARCH_TYPE" = "x86_64" ]; then
-                    echo_info "Linux (x64) ortamı algılandı."
-                    echo_info "Gerekli sistem bağımlılıkları kontrol ediliyor..."
+        if [ "$ARCH_TYPE" = "aarch64" ]; then
+            echo_info "Mimari: arm64"
+            perform_install_or_update "termux-arm64" "MHRS-OtomatikRandevu-termux-arm64.zip"
+        elif [[ "$ARCH_TYPE" == "arm"* ]]; then # armv7l, armv8l etc.
+            echo_info "Mimari: arm (32-bit)"
+            perform_install_or_update "termux-arm" "MHRS-OtomatikRandevu-termux-arm.zip"
+        else
+            echo_error "Desteklenmeyen Termux Mimarisi: $ARCH_TYPE"
+            exit 1
+        fi
+        return
+    fi
+    
+    # 2. Alpine Linux Tespiti
+    if [ -f "/etc/alpine-release" ]; then
+        echo_info "Alpine Linux ortamı algılandı."
+        if [ "$ARCH_TYPE" = "aarch64" ]; then
+            echo_info "Mimari: arm64"
+            echo_info "Gerekli Alpine paketleri kontrol ediliyor/kuruluyor..."
+            if ! command -v sudo >/dev/null 2>&1; then
+                apk add --no-cache sudo
+            fi
+            sudo apk add --no-cache icu-libs openssl-libs lttng-ust
+            echo_success "✓ Gerekli Alpine bağımlılıkları kontrol edildi."
+            perform_install_or_update "alpine-arm64" "MHRS-OtomatikRandevu-alpine-arm64.zip"
+        else
+            echo_error "Desteklenmeyen Alpine Linux Mimarisi: $ARCH_TYPE. Sadece arm64 desteklenmektedir."
+            exit 1
+        fi
+        return
+    fi
+
+    # 3. Genel Linux ve Windows (WSL/Git Bash) Tespiti
+    case "$OS_TYPE" in
+        Linux) 
+            echo_info "Genel Linux ortamı algılandı."
+            if [ "$ARCH_TYPE" = "x86_64" ]; then
+                echo_info "Mimari: x86_64"
+                echo_info "Gerekli sistem bağımlılıkları kontrol ediliyor..."
+                if ! command -v sudo >/dev/null 2>&1; then
+                    echo_error "'sudo' komutu bulunamadı. Lütfen bağımlılıkları manuel kurun: libicu, libssl"
+                else
                     if command -v apt-get >/dev/null 2>&1; then
                         sudo apt-get install -y libicu-dev libssl-dev > /dev/null
                     elif command -v dnf >/dev/null 2>&1; then
                         sudo dnf install -y libicu libssl > /dev/null
                     elif command -v pacman >/dev/null 2>&1; then
-                        if ! pacman -Q icu >/dev/null 2>&1; then sudo pacman -S --needed --noconfirm icu > /dev/null; fi
-                        if ! pacman -Q openssl >/dev/null 2>&1; then sudo pacman -S --needed --noconfirm openssl > /dev/null; fi
+                        sudo pacman -S --needed --noconfirm icu openssl > /dev/null
                     fi
-                    echo_success "✓ Gerekli Linux bağımlılıkları kontrol edildi."
-                    perform_install_or_update "linux" "MHRS-OtomatikRandevu-linux-x64.zip"
-                else
-                    echo_error "Desteklenmeyen Linux mimarisi: $ARCH_TYPE. Sadece x86_64 desteklenmektedir."
-                    exit 1
                 fi
-                ;;
-            CYGWIN*|MINGW*|MSYS*) 
-                if [ "$ARCH_TYPE" = "x86_64" ]; then
-                    echo_info "Windows (x64) ortamı algılandı."
-                    perform_install_or_update "windows" "MHRS-OtomatikRandevu-win-x64.zip"
-                else
-                    echo_error "Desteklenmeyen Windows mimarisi: $ARCH_TYPE."
-                    exit 1
-                fi
-                ;;
-            *)
-                echo_error "Desteklenmeyen işletim sistemi: $OS_TYPE"
+                echo_success "✓ Gerekli Linux bağımlılıkları kontrol edildi."
+                perform_install_or_update "linux-x64" "MHRS-OtomatikRandevu-linux-x64.zip"
+            else
+                echo_error "Desteklenmeyen Linux Mimarisi: $ARCH_TYPE. Sadece x86_64 desteklenmektedir."
                 exit 1
-                ;;
-        esac
-    fi
+            fi
+            ;; 
+        CYGWIN*|MINGW*|MSYS*) 
+            echo_info "Windows (WSL/Git Bash) ortamı algılandı."
+            if [ "$ARCH_TYPE" = "x86_64" ]; then
+                echo_info "Mimari: x86_64"
+                perform_install_or_update "win-x64" "MHRS-OtomatikRandevu-win-x64.zip"
+            elif [ "$ARCH_TYPE" = "i686" ] || [ "$ARCH_TYPE" = "i386" ]; then
+                echo_info "Mimari: x86 (32-bit)"
+                perform_install_or_update "win-x86" "MHRS-OtomatikRandevu-win-x86.zip"
+            else
+                echo_error "Desteklenmeyen Windows Mimarisi: $ARCH_TYPE."
+                exit 1
+            fi
+            ;; 
+        *)
+            echo_error "Desteklenmeyen İşletim Sistemi: $OS_TYPE"
+            exit 1
+            ;; 
+esac
 }
 
 main
