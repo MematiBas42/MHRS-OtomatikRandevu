@@ -226,7 +226,7 @@ main() {
             if ! command -v sudo >/dev/null 2>&1; then
                 apk add --no-cache sudo
             fi
-            sudo apk add --no-cache icu-libs openssl-libs lttng-ust
+            sudo apk add --no-cache icu-libs openssl lttng-ust
             echo_success "✓ Gerekli Alpine bağımlılıkları kontrol edildi."
             perform_install_or_update "alpine-arm64" "MHRS-OtomatikRandevu-alpine-arm64.zip"
         else
