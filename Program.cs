@@ -258,6 +258,7 @@ namespace MHRS_OtomatikRandevu
                 Console.WriteLine("\n1. Bu program test amaçlı geliştirilmiştir. Programın kullanımından doğabilecek tüm sorumluluk kullanıcıya aittir.");
                 Console.WriteLine("\n2. Lütfen MHRS kurallarını unutmayın:");
                 Console.WriteLine("   - Randevunuza gitmeyecekseniz, en geç randevu gününden bir gün önce saat 20:00'a kadar iptal etmelisiniz.");
+                Console.WriteLine("   - Akşam saat 20:00'den sonra ertesi güne alınan randevular iptal edilemez.");
                 Console.WriteLine("   - Randevusunu onayladığı halde gitmeyen veya zamanında iptal etmeyen kişilerin, aynı branş için 15 GÜN boyunca yeni randevu alması kısıtlanacaktır.");
                 Console.WriteLine("   - Bu programın bulduğu randevular için de aynı kurallar geçerlidir.");
                 Console.WriteLine("\nBu bilgilendirmeyi okuyup anladığınızı onaylamak için lütfen ENTER tuşuna basın...");
@@ -275,12 +276,59 @@ namespace MHRS_OtomatikRandevu
             Logger.Info($"================ UYGULAMA BAŞLATILDI (Sürüm: {version}) ================");
             _client = new ClientService();
             
-            _configuration = new ConfigurationBuilder()
+            var configurationBuilder = new ConfigurationBuilder()
                 .SetBasePath(AppContext.BaseDirectory)
-                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-                .Build();
+                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
+            _configuration = configurationBuilder.Build();
 
             _notificationService = new NotificationService(_configuration);
+            
+            if (!_notificationService.IsConfigured)
+            {
+                Console.WriteLine("\nUYARI: Telegram API Token veya Chat ID bilgisi appsettings.json dosyasında eksik. Bildirimler gönderilemeyecek.");
+                Console.WriteLine("-----------------------------------------------------------------");
+                Console.WriteLine("Bilgileri Nasıl Alınır?");
+                Console.WriteLine("1. Telegram'da 'BotFather' adlı bota gidin, '/newbot' komutuyla yeni bir bot oluşturun ve size verdiği API Token'ı kopyalayın.");
+                Console.WriteLine("2. Telegram'da 'RawDataBot' veya 'userinfobot' adlı bota gidin, '/start' komutunu çalıştırın ve size verdiği 'Id' (Chat ID) numarasını kopyalayın.");
+                Console.WriteLine("-----------------------------------------------------------------");
+                Console.WriteLine("Atlamak için ENTER'a, bilgileri şimdi girmek için SPACE (BOŞLUK) tuşuna basın.");
+
+                var key = Console.ReadKey(true);
+                if (key.Key == ConsoleKey.Spacebar)
+                {
+                    Console.Write("Lütfen BotFather'dan aldığınız API Token'ı yapıştırın: ");
+                    var apiToken = Console.ReadLine();
+                    Console.Write("Lütfen RawDataBot'tan aldığınız Chat ID'yi yapıştırın: ");
+                    var chatId = Console.ReadLine();
+
+                    try
+                    {
+                        var appSettingsPath = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
+                        var jsonString = await File.ReadAllTextAsync(appSettingsPath);
+                        var jsonNode = System.Text.Json.Nodes.JsonNode.Parse(jsonString)!;
+
+                        jsonNode["TELEGRAM_API_TOKEN"] = apiToken;
+                        jsonNode["TELEGRAM_CHAT_ID"] = chatId;
+
+                        var options = new JsonSerializerOptions { WriteIndented = true };
+                        await File.WriteAllTextAsync(appSettingsPath, jsonNode.ToJsonString(options));
+                        
+                        _configuration = configurationBuilder.Build();
+                        _notificationService = new NotificationService(_configuration);
+
+                        Console.WriteLine("\n✓ Bilgiler appsettings.json dosyasına başarıyla kaydedildi.");
+                        Thread.Sleep(2000);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"\nHATA: appsettings.json dosyası güncellenirken bir sorun oluştu: {ex.Message}");
+                        Console.WriteLine("Lütfen dosyayı manuel olarak düzenleyin. Devam etmek için ENTER'a basın...");
+                        Console.ReadLine();
+                    }
+                }
+                Console.Clear();
+            }
+
             minimumMinutesToAppointment = int.TryParse(_configuration["MinimumMinutesToAppointment"], out var minutes) ? minutes : 0;
 
 
