@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v4.1 - Nihai)
+# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v4.2 - Son Rötuşlar)
 # Platformu algılar, bağımlılıkları kurar, en son sürümü indirir,
 # ayarları korur ve evrensel bir başlatıcı betik ile PATH ayarını otomatik yapar.
 
@@ -19,10 +19,10 @@ CONFIG_FILE="appsettings.json"
 TOKEN_PATTERN="token_*.txt"
 
 # --- Renkler ve Yardımcı Fonksiyonlar ---
- echo_info() { printf "\033[1;34m%s\033[0m\n" "$1"; }
- echo_success() { printf "\033[1;32m%s\033[0m\n" "$1"; }
- echo_error() { printf "\033[1;31m%s\033[0m\n" "$1" >&2; }
- echo_warn() { printf "\033[1;33m%s\033[0m\n" "$1"; }
+ echo_info() { echo -e "\033[1;34m$1\033[0m"; }
+ echo_success() { echo -e "\033[1;32m$1\033[0m"; }
+ echo_error() { echo -e "\033[1;31m$1\033[0m" >&2; }
+ echo_warn() { echo -e "\033[1;33m$1\033[0m"; }
 
 # --- Betik Mantığı ---
 
@@ -45,7 +45,8 @@ create_launcher() {
     local platform_type="$1"
     local launcher_content
     local shell_rc_file
-    local export_line="export PATH=\"$HOME/.local/bin:$PATH\""
+    local export_line="export PATH=\"
+$HOME/.local/bin:$PATH\""
 
     echo_info "\n--- Aşama 4: 'mhrs' Komutu Yapılandırılıyor ---"
     mkdir -p "$LAUNCHER_DIR"
@@ -70,7 +71,7 @@ cd \"$INSTALL_DIR\"
 
     # PATH kontrolü yap ve gerekirse otomatik ekle
     case ":$PATH:" in
-        *":$LAUNCHER_DIR:"*) 
+        *":$LAUNCHER_DIR:"*)
             echo_success "✓ '$LAUNCHER_DIR' dizini PATH içinde zaten mevcut."
             ;;
         *)
@@ -87,7 +88,6 @@ cd \"$INSTALL_DIR\"
 
             if [ -n "$shell_rc_file" ]; then
                 echo_info "PATH değişkeni '$shell_rc_file' dosyasına otomatik olarak ekleniyor..."
-                # Dosya yoksa bile oluşturur ve mükerrer eklemeyi önler
                 if ! grep -q 'export PATH="$HOME/.local/bin:$PATH"' "$shell_rc_file" 2>/dev/null; then
                     echo "" >> "$shell_rc_file"
                     echo "# MHRS Otomatik Randevu için PATH ayarı" >> "$shell_rc_file"
@@ -168,7 +168,9 @@ perform_install_or_update() {
     create_launcher "$platform_type"
 
     echo_info "\n--- Kurulum Tamamlandı ---"
-    echo_info "Uygulamayı başlatmak için ENTER tuşuna basın..."
+    echo_success "✓ Sonraki sefer 'mhrs' yazarak uygulamayı direkt çalıştırabilirsiniz."
+    echo_info "i Güncelleme kontrolü için bu kurulum betiğini yeniden çalıştırmanız yeterlidir."
+    echo_info "\nUygulamayı şimdi başlatmak için ENTER tuşuna basın..."
     read -r
 
     echo_info "Uygulama ilk kez çalıştırılıyor..."
@@ -191,8 +193,8 @@ main() {
         echo_info "Termux ortamı algılandı."
         if ! command -v dotnet >/dev/null 2>&1; then
                 echo_warn ".NET 8 SDK'sı bulunamadı. Kuruluyor..."
-                DEBIAN_FRONTEND=noninteractive pkg update -y -o Dpkg::Options::="--force-confold" >/dev/null
-                DEBIAN_FRONTEND=noninteractive pkg upgrade -y -o Dpkg::Options::="--force-confold" >/dev/null
+                DEBIAN_FRONTEND=noninteractive pkg update -y -o Dpkg::Options::=\"--force-confold\" >/dev/null
+                DEBIAN_FRONTEND=noninteractive pkg upgrade -y -o Dpkg::Options::=\"--force-confold\" >/dev/null
                 pkg install -y curl unzip git dotnet-sdk-8.0 >/dev/null
                 echo_success "✓ Gerekli Termux bağımlılıkları kuruldu."
         else
