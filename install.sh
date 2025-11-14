@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v5.2 - Alpine Düzeltmeleri)
+# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v5.3 - Kullanıcı Deneyimi)
 # Platformu ve mimariyi algılar, bağımlılıkları kurar, en son sürümü indirir,
 # ayarları korur ve evrensel bir başlatıcı betik ile PATH ayarını otomatik yapar.
 
@@ -8,6 +8,7 @@ set -e
 set -o pipefail
 
 # --- Değişkenler ---
+SCRIPT_VERSION="v5.3"
 REPO="MematiBas42/MHRS-OtomatikRandevu"
 INSTALL_DIR="$HOME/mhrs_randevu"
 LAUNCHER_DIR="$HOME/.local/bin"
@@ -55,14 +56,14 @@ create_launcher() {
 # Bu betik 'install.sh' tarafından otomatik olarak oluşturulmuştur.
 cd \"$INSTALL_DIR\"
 dotnet $APP_DLL \"$@\""
-            ;;
+            ;; 
         win-*) 
             # Self-contained Windows
             launcher_content="#!/bin/bash
 # Bu betik 'install.sh' tarafından otomatik olarak oluşturulmuştur.
 cd \"$INSTALL_DIR\"
 ./MHRS-OtomatikRandevu.exe \"$@\""
-            ;;
+            ;; 
         alpine-*) 
             # Self-contained Alpine with GC fix
             launcher_content="#!/bin/sh
@@ -70,14 +71,14 @@ cd \"$INSTALL_DIR\"
 export COMPlus_GCServer=0
 cd \"$INSTALL_DIR\"
 ./MHRS-OtomatikRandevu \"$@\""
-            ;;
+            ;; 
         *) 
             # Self-contained Linux variants
             launcher_content="#!/bin/bash
 # Bu betik 'install.sh' tarafından otomatik olarak oluşturulmuştur.
 cd \"$INSTALL_DIR\"
 ./MHRS-OtomatikRandevu \"$@\""
-            ;;
+            ;; 
     esac
 
     # Betiği oluştur ve çalıştırılabilir yap
@@ -87,7 +88,10 @@ cd \"$INSTALL_DIR\"
 
     # PATH kontrolü yap ve gerekirse otomatik ekle
     case ":$PATH:" in
-        *:") # This is a placeholder for the actual check, which is complex and depends on the shell
+        *":$LAUNCHER_DIR:"*) 
+            echo_success "✓ '$LAUNCHER_DIR' dizini PATH içinde zaten mevcut."
+            ;; 
+        *)
             echo_warn "UYARI: '$LAUNCHER_DIR' dizini PATH değişkeninizde bulunmuyor."
             
             shell_name=$(basename "$SHELL")
@@ -103,8 +107,7 @@ cd \"$INSTALL_DIR\"
 
             if [ -n "$shell_rc_file" ]; then
                 echo_info "PATH değişkeni '$shell_rc_file' dosyasına otomatik olarak ekleniyor..."
-                local export_line="export PATH=\"
-$HOME/.local/bin:$PATH\""
+                local export_line="export PATH=\"$$HOME/.local/bin:$$PATH\""
                 if ! grep -q 'export PATH="$HOME/.local/bin:$PATH"' "$shell_rc_file" 2>/dev/null; then
                     echo "" >> "$shell_rc_file"
                     echo "# MHRS Otomatik Randevu için PATH ayarı" >> "$shell_rc_file"
@@ -117,10 +120,7 @@ $HOME/.local/bin:$PATH\""
             else
                 echo_error "Desteklenmeyen kabuk ($shell_name). Lütfen '$LAUNCHER_DIR' dizinini manuel olarak PATH'inize ekleyin."
             fi
-            ;;
-        *)
-            echo_success "✓ '$LAUNCHER_DIR' dizini PATH içinde zaten mevcut."
-            ;;
+            ;; 
     esac
 }
 
@@ -141,53 +141,48 @@ perform_install_or_update() {
     else
         local_version=$(cat "$VERSION_FILE")
         if [ "$local_version" = "$remote_version" ]; then
-            echo_success "✓ Uygulama zaten güncel (Sürüm: ${local_version})."
+            echo_success "✓ Uygulama zaten güncel (Sürüm: ${local_version}). Kurulum adımı atlanıyor."
             create_launcher "$platform_identifier"
-            echo_info "\n--- Kurulum Atlandı ---"
-            echo_info "Uygulama zaten güncel olduğu için tekrar indirilmedi."
-            echo_success "✓ 'mhrs' komutu ve PATH ayarları kontrol edildi."
-            echo_info "Güncelleme kontrolü için bu betiği dilediğiniz zaman yeniden çalıştırabilirsiniz."
-            return 0 # Exit the function
+            # Proceed to the end of the function to run the app
+        else
+            echo_info "Yeni sürüm bulundu: $remote_version. İndiriliyor..."
+
+            local temp_backup_dir
+            temp_backup_dir=$(mktemp -d)
+
+            if [ -d "$INSTALL_DIR" ]; then
+                echo_info "Eski ayarlar ve token dosyaları yedekleniyor..."
+                find "$INSTALL_DIR" -name "$CONFIG_FILE" -exec cp {} "$temp_backup_dir/" \;
+                find "$INSTALL_DIR" -name "$TOKEN_PATTERN" -exec cp {} "$temp_backup_dir/" \;
+                rm -rf "$INSTALL_DIR"
+            fi
+            mkdir -p "$INSTALL_DIR"
+
+            DOWNLOAD_URL=$(curl -s "$LATEST_RELEASE_URL" | grep "browser_download_url.*$asset_zip_name" | cut -d '"' -f 4)
+            if [ -z "$DOWNLOAD_URL" ]; then
+                echo_error "HATA: $asset_zip_name için indirme URL'si bulunamadı."
+                exit 1
+            fi
+
+            echo_info "Uygulama dosyaları indiriliyor..."
+            curl -L -o "$INSTALL_DIR/$asset_zip_name" "$DOWNLOAD_URL"
+
+            echo_info "Dosyalar arşivden (sessiz modda) çıkarılıyor..."
+            unzip -oq "$INSTALL_DIR/$asset_zip_name" -d "$INSTALL_DIR"
+            rm "$INSTALL_DIR/$asset_zip_name"
+
+            if [ -d "$temp_backup_dir" ] && [ "$(ls -A "$temp_backup_dir")" ]; then
+                echo_info "Eski ayarlar ve token dosyaları geri yükleniyor..."
+                find "$temp_backup_dir" -name "$CONFIG_FILE" -exec mv {} "$INSTALL_DIR/" \;
+                find "$temp_backup_dir" -name "$TOKEN_PATTERN" -exec mv {} "$INSTALL_DIR/" \;
+            fi
+            rm -rf "$temp_backup_dir"
+
+            echo "$remote_version" > "$VERSION_FILE"
+            echo_success "✓ Kurulum/Güncelleme başarıyla tamamlandı! (Sürüm: $remote_version)"
+            create_launcher "$platform_identifier"
         fi
     fi
-
-    echo_info "Yeni sürüm bulundu: $remote_version. Kurulum/Güncelleme yapılıyor..."
-
-    local temp_backup_dir
-    temp_backup_dir=$(mktemp -d)
-
-    if [ -d "$INSTALL_DIR" ]; then
-        echo_info "Eski ayarlar yedekleniyor..."
-        find "$INSTALL_DIR" -name "$CONFIG_FILE" -exec cp {} "$temp_backup_dir/" \;
-        find "$INSTALL_DIR" -name "$TOKEN_PATTERN" -exec cp {} "$temp_backup_dir/" \;
-        rm -rf "$INSTALL_DIR"
-    fi
-    mkdir -p "$INSTALL_DIR"
-
-    DOWNLOAD_URL=$(curl -s "$LATEST_RELEASE_URL" | grep "browser_download_url.*$asset_zip_name" | cut -d '"' -f 4)
-    if [ -z "$DOWNLOAD_URL" ]; then
-        echo_error "HATA: $asset_zip_name için indirme URL'si bulunamadı."
-        exit 1
-    fi
-
-    echo_info "Uygulama dosyaları indiriliyor..."
-    curl -L -o "$INSTALL_DIR/$asset_zip_name" "$DOWNLOAD_URL"
-
-    echo_info "Dosyalar arşivden (sessiz modda) çıkarılıyor..."
-    unzip -oq "$INSTALL_DIR/$asset_zip_name" -d "$INSTALL_DIR"
-    rm "$INSTALL_DIR/$asset_zip_name"
-
-    if [ -d "$temp_backup_dir" ] && [ "$(ls -A "$temp_backup_dir")" ]; then
-        echo_info "Eski ayarlar ve token dosyaları geri yükleniyor..."
-        find "$temp_backup_dir" -name "$CONFIG_FILE" -exec mv {} "$INSTALL_DIR/" \;
-        find "$temp_backup_dir" -name "$TOKEN_PATTERN" -exec mv {} "$INSTALL_DIR/" \;
-    fi
-    rm -rf "$temp_backup_dir"
-
-    echo "$remote_version" > "$VERSION_FILE"
-    echo_success "✓ Kurulum/Güncelleme başarıyla tamamlandı! (Sürüm: $remote_version)"
-
-    create_launcher "$platform_identifier"
 
     echo_info "\n--- Kurulum Tamamlandı ---"
     echo_success "✓ Sonraki sefer 'mhrs' yazarak uygulamayı direkt çalıştırabilirsiniz."
@@ -204,6 +199,7 @@ perform_install_or_update() {
 }
 
 main() {
+    echo_info "MHRS Otomatik Randevu Kurulum Betiği ${SCRIPT_VERSION}"
     check_common_deps
     echo_info "\n--- Aşama 2: Platform ve Bağımlılıklar Algılanıyor ---"
     
@@ -276,7 +272,7 @@ main() {
                 echo_error "Desteklenmeyen Linux Mimarisi: $ARCH_TYPE. Sadece x86_64 desteklenmektedir."
                 exit 1
             fi
-            ;;
+            ;; 
         CYGWIN*|MINGW*|MSYS*) 
             echo_info "Windows (WSL/Git Bash) ortamı algılandı."
             if [ "$ARCH_TYPE" = "x86_64" ]; then
@@ -289,11 +285,11 @@ main() {
                 echo_error "Desteklenmeyen Windows Mimarisi: $ARCH_TYPE."
                 exit 1
             fi
-            ;;
+            ;; 
         *)
             echo_error "Desteklenmeyen İşletim Sistemi: $OS_TYPE"
             exit 1
-            ;;
+            ;; 
     esac
 }
 
