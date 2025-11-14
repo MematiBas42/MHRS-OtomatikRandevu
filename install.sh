@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v6.0 - Kararlı Sürüm)
+# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v6.2 - Stabil)
 # Platformu ve mimariyi algılar, bağımlılıkları kurar, en son sürümü indirir,
 # ayarları korur ve evrensel bir başlatıcı betik ile PATH ayarını otomatik yapar.
 
@@ -8,7 +8,7 @@ set -e
 set -o pipefail
 
 # --- Değişkenler ---
-SCRIPT_VERSION="v6.0"
+SCRIPT_VERSION="v6.2"
 REPO="MematiBas42/MHRS-OtomatikRandevu"
 INSTALL_DIR="$HOME/mhrs_randevu"
 LAUNCHER_DIR="$HOME/.local/bin"
@@ -44,19 +44,21 @@ get_latest_remote_version() {
     
     if [ -z "$api_output" ]; then
         echo_error "HATA: curl komutundan boş yanıt alındı. Github API hız limitine takılmış olabilirsiniz."
-        return 1
+        echo "" # Return empty string to stdout
+        return
     fi
 
     # Use '|| true' to prevent 'grep' from exiting the script if 'tag_name' is not found.
-    # This allows our own error handling to take over.
     local tag_name
     tag_name=$(echo "$api_output" | grep '"tag_name":' | head -n 1 | cut -d '"' -f 4 || true)
 
     if [ -z "$tag_name" ]; then
         echo_error "HATA: Alınan yanıttan sürüm (tag_name) bilgisi ayıklanamadı."
-        echo_info "--> API Yanıtı (ilk 5 satır):"
-        echo "$api_output" | head -n 5
-        return 1
+        # Print diagnostic info to stderr
+        echo ">> API Yanıtı (ilk 5 satır):" >&2
+        echo "$api_output" | head -n 5 >&2
+        echo "" # Return empty string to stdout
+        return
     fi
     
     echo "$tag_name"
@@ -133,59 +135,67 @@ perform_install_or_update() {
 
     echo_info "\n--- Aşama 3: Kurulum ve Güncelleme ---"
 
+    local remote_version
     remote_version=$(get_latest_remote_version)
+    
     if [ -z "$remote_version" ]; then
         echo_error "HATA: Uzak sürüm bilgisi alınamadı. Betik sonlandırılıyor."
         exit 1
     fi
 
     if [ ! -d "$INSTALL_DIR" ] || [ ! -f "$VERSION_FILE" ]; then
-        echo_info "İlk kurulum algılandı."
+        echo_info "İlk kurulum: Sürüm $remote_version indiriliyor..."
     else
         local local_version
         local_version=$(cat "$VERSION_FILE")
         if [ "$local_version" = "$remote_version" ]; then
             echo_success "✓ Uygulama zaten güncel (Sürüm: ${local_version})."
             create_launcher "$platform_identifier"
-        else
-            echo_info "Yeni sürüm bulundu: $remote_version. İndiriliyor..."
-
-            local temp_backup_dir
-            temp_backup_dir=$(mktemp -d)
-
-            if [ -d "$INSTALL_DIR" ]; then
-                echo_info "Eski ayarlar yedekleniyor..."
-                find "$INSTALL_DIR" -name "$CONFIG_FILE" -exec cp {} "$temp_backup_dir/" \;
-                find "$INSTALL_DIR" -name "$TOKEN_PATTERN" -exec cp {} "$temp_backup_dir/" \;
-                rm -rf "$INSTALL_DIR"
-            fi
-            mkdir -p "$INSTALL_DIR"
-
-            DOWNLOAD_URL=$(curl -sL "$LATEST_RELEASE_URL" | grep "browser_download_url.*$asset_zip_name" | cut -d '"' -f 4 || true)
-            if [ -z "$DOWNLOAD_URL" ]; then
-                echo_error "HATA: '$asset_zip_name' için indirme URL'si bulunamadı."
-                exit 1
-            fi
-
-            echo_info "Uygulama dosyaları indiriliyor..."
-            curl -L -o "$INSTALL_DIR/$asset_zip_name" "$DOWNLOAD_URL"
-
-            echo_info "Dosyalar arşivden çıkarılıyor..."
-            unzip -oq "$INSTALL_DIR/$asset_zip_name" -d "$INSTALL_DIR"
-            rm "$INSTALL_DIR/$asset_zip_name"
-
-            if [ -d "$temp_backup_dir" ] && [ "$(ls -A "$temp_backup_dir")" ]; then
-                echo_info "Eski ayarlar geri yükleniyor..."
-                find "$temp_backup_dir" -name "$CONFIG_FILE" -exec mv {} "$INSTALL_DIR/" \;
-                find "$temp_backup_dir" -name "$TOKEN_PATTERN" -exec mv {} "$INSTALL_DIR/" \;
-            fi
-            rm -rf "$temp_backup_dir"
-
-            echo "$remote_version" > "$VERSION_FILE"
-            echo_success "✓ Kurulum/Güncelleme başarıyla tamamlandı! (Sürüm: $remote_version)"
-            create_launcher "$platform_identifier"
+            echo_info "\n--- Kurulum Tamamlandı ---"
+            echo_success "✓ Sonraki sefer 'mhrs' yazarak uygulamayı direkt çalıştırabilirsiniz."
+            echo_info "i Güncelleme kontrolü için bu kurulum betiğini yeniden çalıştırmanız yeterlidir."
+            echo_info "\nUygulamayı şimdi başlatmak için ENTER tuşuna basın..."
+            read -r
+            $LAUNCHER_PATH
+            exit 0
         fi
+        echo_info "Yeni sürüm bulundu: $remote_version. Güncelleniyor..."
     fi
+
+    local temp_backup_dir
+    temp_backup_dir=$(mktemp -d)
+
+    if [ -d "$INSTALL_DIR" ]; then
+        echo_info "Eski ayarlar yedekleniyor..."
+        find "$INSTALL_DIR" -name "$CONFIG_FILE" -exec cp {} "$temp_backup_dir/" \;
+        find "$INSTALL_DIR" -name "$TOKEN_PATTERN" -exec cp {} "$temp_backup_dir/" \;
+        rm -rf "$INSTALL_DIR"
+    fi
+    mkdir -p "$INSTALL_DIR"
+
+    DOWNLOAD_URL=$(curl -sL "$LATEST_RELEASE_URL" | grep "browser_download_url.*$asset_zip_name" | cut -d '"' -f 4 || true)
+    if [ -z "$DOWNLOAD_URL" ]; then
+        echo_error "HATA: '$asset_zip_name' için indirme URL'si bulunamadı."
+        exit 1
+    fi
+
+    echo_info "Uygulama dosyaları indiriliyor..."
+    curl -L -o "$INSTALL_DIR/$asset_zip_name" "$DOWNLOAD_URL"
+
+    echo_info "Dosyalar arşivden çıkarılıyor..."
+    unzip -oq "$INSTALL_DIR/$asset_zip_name" -d "$INSTALL_DIR"
+    rm "$INSTALL_DIR/$asset_zip_name"
+
+    if [ -d "$temp_backup_dir" ] && [ "$(ls -A "$temp_backup_dir")" ]; then
+        echo_info "Eski ayarlar geri yükleniyor..."
+        find "$temp_backup_dir" -name "$CONFIG_FILE" -exec mv {} "$INSTALL_DIR/" \;
+        find "$temp_backup_dir" -name "$TOKEN_PATTERN" -exec mv {} "$INSTALL_DIR/" \;
+    fi
+    rm -rf "$temp_backup_dir"
+
+    echo "$remote_version" > "$VERSION_FILE"
+    echo_success "✓ Kurulum/Güncelleme başarıyla tamamlandı! (Sürüm: $remote_version)"
+    create_launcher "$platform_identifier"
 
     echo_info "\n--- Kurulum Tamamlandı ---"
     echo_success "✓ Sonraki sefer 'mhrs' yazarak uygulamayı direkt çalıştırabilirsiniz."
@@ -215,8 +225,8 @@ main() {
         echo_info "Gerekli Termux paketleri kontrol ediliyor/güncelleniyor..."
         echo_warn "Bu işlem cihazınızın hızına ve internet bağlantınıza göre uzun sürebilir."
         
-        DEBIAN_FRONTEND=noninteractive pkg update -y -o Dpkg::Options::="--force-confold"
-        DEBIAN_FRONTEND=noninteractive pkg upgrade -y -o Dpkg::Options::="--force-confold"
+        DEBIAN_FRONTEND=noninteractive pkg update -y -o Dpkg::Options::=\"--force-confold\"
+        DEBIAN_FRONTEND=noninteractive pkg upgrade -y -o Dpkg::Options::=\"--force-confold\"
         pkg install -y dotnet-sdk-8.0
 
         echo_success "✓ .NET 8 SDK ve Termux paketleri kontrol edildi."
