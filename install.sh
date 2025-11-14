@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v5.8 - Hata Ayıklama)
+# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v5.9 - Gelişmiş Hata Ayıklama)
 # Platformu ve mimariyi algılar, bağımlılıkları kurar, en son sürümü indirir,
 # ayarları korur ve evrensel bir başlatıcı betik ile PATH ayarını otomatik yapar.
 
@@ -8,7 +8,7 @@ set -e
 set -o pipefail
 
 # --- Değişkenler ---
-SCRIPT_VERSION="v5.8"
+SCRIPT_VERSION="v5.9"
 REPO="MematiBas42/MHRS-OtomatikRandevu"
 INSTALL_DIR="$HOME/mhrs_randevu"
 LAUNCHER_DIR="$HOME/.local/bin"
@@ -18,6 +18,7 @@ APP_DLL="MHRS-OtomatikRandevu.dll"
 VERSION_FILE="$INSTALL_DIR/version.txt"
 CONFIG_FILE="appsettings.json"
 TOKEN_PATTERN="token_*.txt"
+REMOTE_VERSION_HOLDER="" # Global variable for version check
 
 # --- Renkler ve Yardımcı Fonksiyonlar ---
  echo_info() { echo -e "\033[1;34m$1\033[0m"; }
@@ -38,8 +39,8 @@ check_common_deps() {
     echo_success "✓ Temel araçlar mevcut."
 }
 
-get_latest_remote_version() {
-    echo_info "--> DEBUG: Sürüm bilgisi alınmaya çalışılıyor..."
+get_latest_remote_version_and_set_global() {
+    echo_info "--> DEBUG: Sürüm bilgisi alınmaya çalışılıyor (fonksiyon içi)..."
     set +e # Hata ayıklama için geçici olarak 'exit on error' modunu kapat
     CURL_OUTPUT=$(curl -s -L "$LATEST_RELEASE_URL")
     CURL_EXIT_CODE=$?
@@ -49,12 +50,14 @@ get_latest_remote_version() {
     
     if [ $CURL_EXIT_CODE -ne 0 ]; then
         echo_error "HATA: curl komutu başarısız oldu (çıkış kodu: $CURL_EXIT_CODE). Ağ bağlantınızı veya 'curl' kurulumunu kontrol edin."
-        return 1
+        REMOTE_VERSION_HOLDER=""
+        return
     fi
     
     if [ -z "$CURL_OUTPUT" ]; then
         echo_error "HATA: curl komutundan boş yanıt alındı. Github API hız limitine takılmış olabilirsiniz."
-        return 1
+        REMOTE_VERSION_HOLDER=""
+        return
     fi
 
     TAG_NAME=$(echo "$CURL_OUTPUT" | grep '"tag_name":' | head -n 1 | cut -d '"' -f 4)
@@ -63,15 +66,16 @@ get_latest_remote_version() {
         echo_error "HATA: Alınan yanıttan sürüm (tag_name) bilgisi ayıklanamadı."
         echo_info "--> DEBUG: curl ham çıktısı (ilk 5 satır):"
         echo "$CURL_OUTPUT" | head -n 5
-        return 1
+        REMOTE_VERSION_HOLDER=""
+        return
     fi
 
     echo_info "--> DEBUG: Bulunan sürüm etiketi: '$TAG_NAME'"
-    echo "$TAG_NAME"
+    REMOTE_VERSION_HOLDER="$TAG_NAME"
 }
 
 create_launcher() {
-    local platform_identifier="$1" # e.g., 'win-x64', 'termux-arm'
+    local platform_identifier="$1"
     local launcher_content
 
     echo_info "\n--- Aşama 4: 'mhrs' Komutu Yapılandırılıyor ---"
@@ -79,27 +83,17 @@ create_launcher() {
 
     case "$platform_identifier" in
         termux-*) 
-            launcher_content="#!/bin/bash
-cd \"$INSTALL_DIR\"
-dotnet $APP_DLL \"$@\""
-            ;; 
+            launcher_content="#!/bin/bash\ncd \"$INSTALL_DIR\"\ndotnet $APP_DLL \"\$@\""
+            ;;
         win-*) 
-            launcher_content="#!/bin/bash
-cd \"$INSTALL_DIR\"
-./MHRS-OtomatikRandevu.exe \"$@\""
-            ;; 
+            launcher_content="#!/bin/bash\ncd \"$INSTALL_DIR\"\n./MHRS-OtomatikRandevu.exe \"\$@\""
+            ;;
         alpine-*) 
-            launcher_content="#!/bin/sh
-export COMPlus_GCServer=0
-export COMPlus_GCHeapHardLimit=0x10000000
-cd \"$INSTALL_DIR\"
-./MHRS-OtomatikRandevu \"$@\""
-            ;; 
+            launcher_content="#!/bin/sh\nexport COMPlus_GCServer=0\nexport COMPlus_GCHeapHardLimit=0x10000000\ncd \"$INSTALL_DIR\"\n./MHRS-OtomatikRandevu \"\$@\""
+            ;;
         *) 
-            launcher_content="#!/bin/bash
-cd \"$INSTALL_DIR\"
-./MHRS-OtomatikRandevu \"$@\""
-            ;; 
+            launcher_content="#!/bin/bash\ncd \"$INSTALL_DIR\"\n./MHRS-OtomatikRandevu \"\$@\""
+            ;;
     esac
 
     echo "$launcher_content" > "$LAUNCHER_PATH"
@@ -109,7 +103,7 @@ cd \"$INSTALL_DIR\"
     case ":$PATH:" in
         *":$LAUNCHER_DIR:"*) 
             echo_success "✓ '$LAUNCHER_DIR' dizini PATH içinde zaten mevcut."
-            ;; 
+            ;;
         *)
             echo_warn "UYARI: '$LAUNCHER_DIR' dizini PATH değişkeninizde bulunmuyor."
             
@@ -151,7 +145,9 @@ perform_install_or_update() {
 
     echo_info "\n--- Aşama 3: Kurulum ve Güncelleme ---"
 
-    remote_version=$(get_latest_remote_version)
+    get_latest_remote_version_and_set_global
+    local remote_version="$REMOTE_VERSION_HOLDER"
+    
     if [ -z "$remote_version" ]; then
         echo_error "HATA: Uzak sürüm bilgisi alınamadı. Betik sonlandırılıyor."
         exit 1
@@ -160,7 +156,7 @@ perform_install_or_update() {
     if [ ! -d "$INSTALL_DIR" ] || [ ! -f "$VERSION_FILE" ]; then
         echo_info "İlk kurulum algılandı."
     else
-        local_version=$(cat "$VERSION_FILE")
+        local local_version=$(cat "$VERSION_FILE")
         if [ "$local_version" = "$remote_version" ]; then
             echo_success "✓ Uygulama zaten güncel (Sürüm: ${local_version})."
             create_launcher "$platform_identifier"
@@ -295,7 +291,7 @@ main() {
                 echo_error "Desteklenmeyen Linux Mimarisi: $ARCH_TYPE. Sadece x86_64 desteklenmektedir."
                 exit 1
             fi
-            ;; 
+            ;;
         CYGWIN*|MINGW*|MSYS*) 
             echo_info "Windows (WSL/Git Bash) ortamı algılandı."
             if [ "$ARCH_TYPE" = "x86_64" ]; then
@@ -308,11 +304,11 @@ main() {
                 echo_error "Desteklenmeyen Windows Mimarisi: $ARCH_TYPE."
                 exit 1
             fi
-            ;; 
+            ;;
         *)
             echo_error "Desteklenmeyen İşletim Sistemi: $OS_TYPE"
             exit 1
-            ;; 
+            ;;
     esac
 }
 
