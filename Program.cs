@@ -395,9 +395,6 @@ namespace MHRS_OtomatikRandevu
             }
             #endregion
 
-            Console.WriteLine("\nKontroller tamamlandı. Seçim ekranına geçmek için ENTER tuşuna basın...");
-            Console.ReadLine();
-
             List<SearchCombination> searchCombinations = new List<SearchCombination> { new SearchCombination() };
             List<SearchCombination> nextTierCombinations;
 

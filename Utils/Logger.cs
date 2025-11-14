@@ -128,7 +128,15 @@ namespace MHRS_OtomatikRandevu.Utils
             Console.Write(promptToShow);
             Log(LogLevel.PROMPT, promptToShow);
 
-            string? input = Console.ReadLine();
+            string? input;
+            if (isPassword)
+            {
+                input = ConsoleUtil.ReadPassword();
+            }
+            else
+            {
+                input = Console.ReadLine();
+            }
 
             if (input == null || IsExiting)
             {
