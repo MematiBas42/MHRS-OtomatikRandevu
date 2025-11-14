@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v5.7 - PATH Düzeltmesi)
+# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v5.8 - Hata Ayıklama)
 # Platformu ve mimariyi algılar, bağımlılıkları kurar, en son sürümü indirir,
 # ayarları korur ve evrensel bir başlatıcı betik ile PATH ayarını otomatik yapar.
 
@@ -8,7 +8,7 @@ set -e
 set -o pipefail
 
 # --- Değişkenler ---
-SCRIPT_VERSION="v5.7"
+SCRIPT_VERSION="v5.8"
 REPO="MematiBas42/MHRS-OtomatikRandevu"
 INSTALL_DIR="$HOME/mhrs_randevu"
 LAUNCHER_DIR="$HOME/.local/bin"
@@ -39,7 +39,35 @@ check_common_deps() {
 }
 
 get_latest_remote_version() {
-    curl -s "$LATEST_RELEASE_URL" | grep '"tag_name":' | head -n 1 | cut -d '"' -f 4
+    echo_info "--> DEBUG: Sürüm bilgisi alınmaya çalışılıyor..."
+    set +e # Hata ayıklama için geçici olarak 'exit on error' modunu kapat
+    CURL_OUTPUT=$(curl -s -L "$LATEST_RELEASE_URL")
+    CURL_EXIT_CODE=$?
+    set -e # 'exit on error' modunu tekrar aç
+
+    echo_info "--> DEBUG: curl komutu çıkış kodu: $CURL_EXIT_CODE"
+    
+    if [ $CURL_EXIT_CODE -ne 0 ]; then
+        echo_error "HATA: curl komutu başarısız oldu (çıkış kodu: $CURL_EXIT_CODE). Ağ bağlantınızı veya 'curl' kurulumunu kontrol edin."
+        return 1
+    fi
+    
+    if [ -z "$CURL_OUTPUT" ]; then
+        echo_error "HATA: curl komutundan boş yanıt alındı. Github API hız limitine takılmış olabilirsiniz."
+        return 1
+    fi
+
+    TAG_NAME=$(echo "$CURL_OUTPUT" | grep '"tag_name":' | head -n 1 | cut -d '"' -f 4)
+    
+    if [ -z "$TAG_NAME" ]; then
+        echo_error "HATA: Alınan yanıttan sürüm (tag_name) bilgisi ayıklanamadı."
+        echo_info "--> DEBUG: curl ham çıktısı (ilk 5 satır):"
+        echo "$CURL_OUTPUT" | head -n 5
+        return 1
+    fi
+
+    echo_info "--> DEBUG: Bulunan sürüm etiketi: '$TAG_NAME'"
+    echo "$TAG_NAME"
 }
 
 create_launcher() {
@@ -52,27 +80,23 @@ create_launcher() {
     case "$platform_identifier" in
         termux-*) 
             launcher_content="#!/bin/bash
-# Bu betik 'install.sh' tarafından otomatik olarak oluşturulmuştur.
 cd \"$INSTALL_DIR\"
 dotnet $APP_DLL \"$@\""
             ;; 
         win-*) 
             launcher_content="#!/bin/bash
-# Bu betik 'install.sh' tarafından otomatik olarak oluşturulmuştur.
 cd \"$INSTALL_DIR\"
 ./MHRS-OtomatikRandevu.exe \"$@\""
             ;; 
         alpine-*) 
             launcher_content="#!/bin/sh
-# Bu betik 'install.sh' tarafından otomatik olarak oluşturulmuştur.
 export COMPlus_GCServer=0
-export COMPlus_GCHeapHardLimit=0x10000000 # 256MB Heap Limiti
+export COMPlus_GCHeapHardLimit=0x10000000
 cd \"$INSTALL_DIR\"
 ./MHRS-OtomatikRandevu \"$@\""
             ;; 
         *) 
             launcher_content="#!/bin/bash
-# Bu betik 'install.sh' tarafından otomatik olarak oluşturulmuştur.
 cd \"$INSTALL_DIR\"
 ./MHRS-OtomatikRandevu \"$@\""
             ;; 
@@ -83,21 +107,21 @@ cd \"$INSTALL_DIR\"
     echo_success "✓ Başlatıcı betik '$LAUNCHER_PATH' adresinde oluşturuldu."
 
     case ":$PATH:" in
-        *:":$LAUNCHER_DIR:"*) 
+        *":$LAUNCHER_DIR:"*) 
             echo_success "✓ '$LAUNCHER_DIR' dizini PATH içinde zaten mevcut."
             ;; 
         *)
             echo_warn "UYARI: '$LAUNCHER_DIR' dizini PATH değişkeninizde bulunmuyor."
             
             shell_name=$(basename "$SHELL")
-            local export_line="export PATH=\"\$HOME/.local/bin:\$PATH\""
+            local export_line="export PATH=\"
+$HOME/.local/bin:$PATH\""
             
             if [ "$shell_name" = "bash" ]; then
                 files_to_try=("$HOME/.bashrc")
             elif [ "$shell_name" = "zsh" ]; then
                 files_to_try=("$HOME/.zshrc")
             elif [ "$shell_name" = "ash" ] || [ "$shell_name" = "sh" ]; then
-                # Brute-force for ash/sh by writing to all common files
                 files_to_try=("$HOME/.profile" "$HOME/.ashrc" "$HOME/.shrc")
             else
                 files_to_try=()
@@ -129,7 +153,7 @@ perform_install_or_update() {
 
     remote_version=$(get_latest_remote_version)
     if [ -z "$remote_version" ]; then
-        echo_error "HATA: Uzak sürüm bilgisi alınamadı."
+        echo_error "HATA: Uzak sürüm bilgisi alınamadı. Betik sonlandırılıyor."
         exit 1
     fi
 
@@ -153,9 +177,9 @@ perform_install_or_update() {
             fi
             mkdir -p "$INSTALL_DIR"
 
-            DOWNLOAD_URL=$(curl -s "$LATEST_RELEASE_URL" | grep "browser_download_url.*$asset_zip_name" | cut -d '"' -f 4)
+            DOWNLOAD_URL=$(curl -s "$LATEST_RELEASE_URL" | grep 'browser_download_url.*$asset_zip_name' | cut -d '"' -f 4)
             if [ -z "$DOWNLOAD_URL" ]; then
-                echo_error "HATA: $asset_zip_name için indirme URL'si bulunamadı."
+                echo_error "HATA: '$asset_zip_name' için indirme URL'si bulunamadı."
                 exit 1
             fi
 
@@ -207,8 +231,8 @@ main() {
         echo_info "Gerekli Termux paketleri kontrol ediliyor/güncelleniyor..."
         echo_warn "Bu işlem cihazınızın hızına ve internet bağlantınıza göre uzun sürebilir."
         
-        DEBIAN_FRONTEND=noninteractive pkg update -y -o Dpkg::Options::=\"--force-confold\"
-        DEBIAN_FRONTEND=noninteractive pkg upgrade -y -o Dpkg::Options::=\"--force-confold\"
+        DEBIAN_FRONTEND=noninteractive pkg update -y -o Dpkg::Options::="--force-confold"
+        DEBIAN_FRONTEND=noninteractive pkg upgrade -y -o Dpkg::Options::="--force-confold"
         pkg install -y dotnet-sdk-8.0
 
         echo_success "✓ .NET 8 SDK ve Termux paketleri kontrol edildi."
