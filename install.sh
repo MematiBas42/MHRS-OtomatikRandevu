@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v2)
+# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v3 - Kurşun Geçirmez)
 # Platformu algılar, bağımlılıkları kurar, en son sürümü indirir,
-# token ve appsettings.json'ı koruyarak günceller ve uygulamayı başlatır.
+# ayarları korur ve evrensel bir başlatıcı betik oluşturur.
 
 set -e
 set -o pipefail
@@ -10,6 +10,8 @@ set -o pipefail
 # --- Değişkenler ---
 REPO="MematiBas42/MHRS-OtomatikRandevu"
 INSTALL_DIR="$HOME/mhrs_randevu"
+LAUNCHER_DIR="$HOME/.local/bin"
+LAUNCHER_PATH="$LAUNCHER_DIR/mhrs"
 LATEST_RELEASE_URL="https://api.github.com/repos/$REPO/releases/latest"
 APP_DLL="MHRS-OtomatikRandevu.dll"
 VERSION_FILE="$INSTALL_DIR/version.txt"
@@ -17,10 +19,10 @@ CONFIG_FILE="appsettings.json"
 TOKEN_PATTERN="token_*.txt"
 
 # --- Renkler ve Yardımcı Fonksiyonlar ---
-echo_info() { printf "\033[1;34m%s\033[0m\n" "$1"; }
-echo_success() { printf "\033[1;32m%s\033[0m\n" "$1"; }
-echo_error() { printf "\033[1;31m%s\033[0m\n" "$1" >&2; }
-echo_warn() { printf "\033[1;33m%s\033[0m\n" "$1"; }
+echo_info() { printf "\033[1;34m%s\033[0m\n" ""; }
+echo_success() { printf "\033[1;32m%s\033[0m\n" ""; }
+echo_error() { printf "\033[1;31m%s\033[0m\n" "" >&2; }
+echo_warn() { printf "\033[1;33m%s\033[0m\n" ""; }
 
 # Gerekli araçların varlığını kontrol et
 check_common_deps() {
@@ -37,38 +39,58 @@ get_latest_remote_version() {
     curl -s "$LATEST_RELEASE_URL" | grep '"tag_name":' | head -n 1 | cut -d '"' -f 4
 }
 
-# Alias ekleme fonksiyonu
-add_alias() {
-    local alias_cmd
-    local shell_rc_file
-    local shell_name=$(basename "$SHELL")
-    local app_executable="$1"
+# Evrensel başlatıcı betiği oluşturma ve PATH kontrolü
+create_launcher() {
+    local platform_type=""
+    local launcher_content
 
-    alias_cmd="alias mhrs='cd $INSTALL_DIR && $app_executable'"
+    echo_info "'$LAUNCHER_PATH' adresinde başlatıcı betik oluşturuluyor..."
+    mkdir -p "$LAUNCHER_DIR"
 
-    case "$shell_name" in
-        bash) shell_rc_file="$HOME/.bashrc" ;; 
-        zsh) shell_rc_file="$HOME/.zshrc" ;; 
-        *) 
-            echo_warn "UYARI: Desteklenmeyen kabuk ($shell_name). 'mhrs' kısayolu otomatik eklenemedi."
-            return
-            ;; 
-    esac
-
-    if [ -f "$shell_rc_file" ] && ! grep -q "alias mhrs=" "$shell_rc_file"; then
-        echo "" >> "$shell_rc_file"
-        echo "# MHRS Otomatik Randevu Botu için kısayol" >> "$shell_rc_file"
-        echo "$alias_cmd" >> "$shell_rc_file"
-        echo_success "✓ 'mhrs' kısayolu '$shell_rc_file' dosyasına eklendi."
-        echo_info "Kısayolun etkinleşmesi için terminali yeniden başlatın veya 'source $shell_rc_file' komutunu çalıştırın."
+    # Platforma özel başlatıcı içeriğini belirle
+    if [ "$platform_type" = "termux" ]; then
+        launcher_content="#!/bin/bash
+# Bu betik 'install.sh' tarafından otomatik olarak oluşturulmuştur.
+cd \"$INSTALL_DIR\"
+dotnet $APP_DLL \"\$@\""
+    elif [ "$platform_type" = "windows" ]; then
+        launcher_content="#!/bin/bash
+# Bu betik 'install.sh' tarafından otomatik olarak oluşturulmuştur.
+cd \"$INSTALL_DIR\"
+./MHRS-OtomatikRandevu.exe \"\$@\""
+    else # linux
+        launcher_content="#!/bin/bash
+# Bu betik 'install.sh' tarafından otomatik olarak oluşturulmuştur.
+cd \"$INSTALL_DIR\"
+./MHRS-OtomatikRandevu \"\$@\""
     fi
+
+    # Betiği oluştur ve çalıştırılabilir yap
+    echo "$launcher_content" > "$LAUNCHER_PATH"
+    chmod +x "$LAUNCHER_PATH"
+
+    echo_success "✓ 'mhrs' komutu başarıyla oluşturuldu."
+
+    # PATH kontrolü yap ve kullanıcıyı bilgilendir
+    case ":$PATH:" in
+        *":$LAUNCHER_DIR:"*)
+            # Zaten PATH içinde, bir şey yapma
+            ;;
+        *)
+            echo_warn "----------------------------------------------------------------"
+            echo_warn "UYARI: '$LAUNCHER_DIR' dizini PATH değişkeninizde bulunmuyor."
+            echo_info "Uygulamayı her yerden 'mhrs' komutuyla çalıştırmak için, lütfen aşağıdaki satırı kabuk yapılandırma dosyanıza (~/.bashrc, ~/.zshrc vb.) ekleyin:"
+            echo_info "export PATH=\"\$HOME/.local/bin:\$PATH\""
+            echo_info "Bu değişikliğin ardından terminalinizi yeniden başlatmanız gerekmektedir."
+            echo_warn "----------------------------------------------------------------"
+            ;;
+    esac
 }
 
 # --- Kurulum ve Güncelleme Mantığı ---
 perform_install_or_update() {
-    local platform_type="$1"
+    local platform_type=""
     local asset_zip_name="$2"
-    local app_executable="$3"
     local is_first_install=false
     local local_version=""
     
@@ -124,16 +146,21 @@ perform_install_or_update() {
         # Yeni sürüm bilgisini kaydet
         echo "$remote_version" > "$VERSION_FILE"
         echo_success "✓ Kurulum/Güncelleme başarıyla tamamlandı! (Sürüm: $remote_version)"
-
-        if [ "$is_first_install" = true ]; then
-            add_alias "$app_executable"
-        fi
     fi
 
-    # Çalıştır
-    echo_info "Uygulama başlatılıyor..."
+    # Her kurulum/güncellemede başlatıcıyı oluştur/güncelle
+    create_launcher "$platform_type"
+
+    # Uygulamayı doğrudan çalıştırma (sadece bu betik üzerinden çalıştırıldığında)
+    echo_info "Kurulum sonrası ilk çalıştırma yapılıyor..."
     cd "$INSTALL_DIR"
-    eval "$app_executable"
+    if [ "$platform_type" = "termux" ]; then
+        dotnet $APP_DLL "$@"
+    elif [ "$platform_type" = "windows" ]; then
+        ./MHRS-OtomatikRandevu.exe "$@"
+    else # linux
+        ./MHRS-OtomatikRandevu "$@"
+    fi
 }
 
 # --- Ana Betik Mantığı ---
@@ -149,7 +176,7 @@ main() {
                 DEBIAN_FRONTEND=noninteractive pkg upgrade -y -o Dpkg::Options::="--force-confold"
                 pkg install -y curl unzip git dotnet-sdk-8.0
         fi
-        perform_install_or_update "termux" "MHRS-OtomatikRandevu-termux-arm64.zip" "dotnet $APP_DLL"
+        perform_install_or_update "termux" "MHRS-OtomatikRandevu-termux-arm64.zip"
     else
         OS_TYPE=$(uname -s)
         ARCH_TYPE=$(uname -m)
@@ -172,7 +199,7 @@ main() {
                             sudo pacman -S --needed --noconfirm openssl > /dev/null
                         fi
                     fi
-                    perform_install_or_update "linux" "MHRS-OtomatikRandevu-linux-x64.zip" "./MHRS-OtomatikRandevu"
+                    perform_install_or_update "linux" "MHRS-OtomatikRandevu-linux-x64.zip"
                 else
                     echo_error "Desteklenmeyen Linux mimarisi: $ARCH_TYPE. Sadece x86_64 desteklenmektedir."
                     exit 1
@@ -181,7 +208,7 @@ main() {
             CYGWIN*|MINGW*|MSYS*) 
                 if [ "$ARCH_TYPE" = "x86_64" ]; then
                     echo_info "Windows (x64) ortamı algılandı."
-                    perform_install_or_update "windows" "MHRS-OtomatikRandevu-win-x64.zip" "./MHRS-OtomatikRandevu.exe"
+                    perform_install_or_update "windows" "MHRS-OtomatikRandevu-win-x64.zip"
                 else
                     echo_error "Desteklenmeyen Windows mimarisi: $ARCH_TYPE."
                     exit 1
