@@ -1,14 +1,15 @@
 #!/bin/bash
 
-# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v6.5 - Nihai Kararlı Sürüm)
+# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v7.0 - "Sihirsiz" Stabil Sürüm)
 # Platformu ve mimariyi algılar, bağımlılıkları kurar, en son sürümü indirir,
 # ayarları korur ve evrensel bir başlatıcı betik ile PATH ayarını otomatik yapar.
+# Bu sürüm, kullanıcı isteği üzerine RC dosyalarında temizlik yapmaz, sadece ekleme yapar.
 
 set -e
 set -o pipefail
 
 # --- Değişkenler ---
-SCRIPT_VERSION="v6.5"
+SCRIPT_VERSION="v7.0"
 REPO="MematiBas42/MHRS-OtomatikRandevu"
 INSTALL_DIR="$HOME/mhrs_randevu"
 LAUNCHER_DIR="$HOME/.local/bin"
@@ -62,21 +63,6 @@ get_latest_remote_version() {
     echo "$tag_name"
 }
 
-cleanup_rc_files() {
-    local files_to_clean=($@)
-    echo_info "--> Eski MHRS PATH girdileri temizleniyor..."
-    for rc_file in "${files_to_clean[@]}"; do
-        if [ -f "$rc_file" ]; then
-            # Remove the comment line and the line that follows it
-            sed -i -e "/$PATH_COMMENT/{N;d;}" "$rc_file"
-            # Remove any remaining broken lines from old versions
-            sed -i -e "/mhrs_randevu/d" "$rc_file"
-            sed -i -e "/".local"/bin/d" "$rc_file"
-        fi
-    done
-}
-
-
 create_launcher() {
     local platform_identifier="$1"
     local launcher_content
@@ -85,10 +71,14 @@ create_launcher() {
     mkdir -p "$LAUNCHER_DIR"
 
     case "$platform_identifier" in
-        termux-*) launcher_content="#!/bin/bash\ncd \"$INSTALL_DIR\"\ndotnet $APP_DLL \"\$@\"" ;; 
-        win-*) launcher_content="#!/bin/bash\ncd \"$INSTALL_DIR\"\n./MHRS-OtomatikRandevu.exe \"\$@\"" ;; 
-        alpine-*) launcher_content="#!/bin/sh\nexport COMPlus_GCServer=0\nexport COMPlus_GCHeapHardLimit=0x10000000\ncd \"$INSTALL_DIR\"\n./MHRS-OtomatikRandevu \"\$@\"" ;; 
-        *) launcher_content="#!/bin/bash\ncd \"$INSTALL_DIR\"\n./MHRS-OtomatikRandevu \"\$@\"" ;; 
+        termux-*) launcher_content="#!/bin/bash\ncd \"$INSTALL_DIR\"
+dotnet $APP_DLL \"\$@\"" ;; 
+        win-*) launcher_content="#!/bin/bash\ncd \"$INSTALL_DIR\"
+./MHRS-OtomatikRandevu.exe \"\$@\"" ;; 
+        alpine-*) launcher_content="#!/bin/sh\nexport COMPlus_GCServer=0\nexport COMPlus_GCHeapHardLimit=0x10000000\ncd \"$INSTALL_DIR\"
+./MHRS-OtomatikRandevu \"\$@\"" ;; 
+        *) launcher_content="#!/bin/bash\ncd \"$INSTALL_DIR\"
+./MHRS-OtomatikRandevu \"\$@\"" ;; 
     esac
 
     echo -e "$launcher_content" > "$LAUNCHER_PATH"
@@ -96,7 +86,7 @@ create_launcher() {
     echo_success "✓ Başlatıcı betik '$LAUNCHER_PATH' adresinde oluşturuldu."
 
     # --- PATH Configuration ---
-    if [[ ":$PATH:" == *":$LAUNCHER_DIR:"* ]]; then
+    if [[ ":$PATH:" == ".*:"$LAUNCHER_DIR:"*" ]]; then
         echo_success "✓ '$LAUNCHER_DIR' dizini PATH içinde zaten mevcut."
         return
     fi
@@ -121,7 +111,7 @@ create_launcher() {
     fi
 
     if [ ${#files_to_try[@]} -gt 0 ]; then
-        cleanup_rc_files "${files_to_try[@]}"
+        # cleanup_rc_files "${files_to_try[@]}" # This function was removed in the new version
 
         echo_info "--> PATH ayarları şu dosyalara yazılıyor: ${files_to_try[*]}"
         local export_line="export PATH=\
