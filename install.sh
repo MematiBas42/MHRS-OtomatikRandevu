@@ -1,13 +1,13 @@
 #!/bin/bash
 
-# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v7.7 - Nihai Sözdizim Düzeltmesi)
+# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v7.8 - Nihai Sözdizim Düzeltmesi)
 # Bu sürüm, Termux için bağımlılık kurulumunu geri getirir ve tüm platformlar için stabilite sağlar.
 
 set -e
 set -o pipefail
 
 # --- Değişkenler ---
-SCRIPT_VERSION="v7.7"
+SCRIPT_VERSION="v7.8"
 REPO="MematiBas42/MHRS-OtomatikRandevu"
 INSTALL_DIR="$HOME/mhrs_randevu"
 LATEST_RELEASE_URL="https://api.github.com/repos/$REPO/releases/latest"
@@ -72,8 +72,8 @@ dotnet $APP_DLL \"\$@\""
             
             echo_info "--> Termux için başlatıcı '$LAUNCHER_PATH' adresine kuruluyor..."
             mkdir -p "$LAUNCHER_DIR"
-            echo -e "$launcher_content" > "$LAUNCHER_PATH"
-            chmod +x "$LAUNCHER_PATH"
+echo -e "$launcher_content" > "$LAUNCHER_PATH"
+chmod +x "$LAUNCHER_PATH"
             echo_success "✓ Başlatıcı betik '$LAUNCHER_PATH' adresine başarıyla kuruldu."
             ;; 
         
@@ -105,7 +105,7 @@ dotnet $APP_DLL \"\$@\""
 
             local temp_launcher
             temp_launcher=$(mktemp)
-            echo -e "$launcher_content" > "$temp_launcher"
+echo -e "$launcher_content" > "$temp_launcher"
             
             $SUDO_CMD mkdir -p "$LAUNCHER_DIR"
             $SUDO_CMD mv "$temp_launcher" "$LAUNCHER_PATH"
@@ -234,7 +234,7 @@ main() {
                 sudo apt-get install -y libicu-dev libssl-dev > /dev/null
             elif command -v dnf >/dev/null 2>&1; then
                 sudo dnf install -y libicu libssl-devel > /dev/null
-            elif command -v pacman >/dev/null 2>&1;
+            elif command -v pacman >/dev/null 2>&1; then
                 (sudo pacman -S --needed --noconfirm icu openssl || echo_warn "UYARI: Bağımlılıklar kurulamadı. 'sudo pacman -Syu' ile sistemi güncelleyin.")
             fi
              echo_success "✓ Gerekli Linux bağımlılıkları kontrol edildi."
