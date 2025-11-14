@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v5.3 - Kullanıcı Deneyimi)
+# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v5.4 - Gelişmiş Alpine Düzeltmeleri)
 # Platformu ve mimariyi algılar, bağımlılıkları kurar, en son sürümü indirir,
 # ayarları korur ve evrensel bir başlatıcı betik ile PATH ayarını otomatik yapar.
 
@@ -8,7 +8,7 @@ set -e
 set -o pipefail
 
 # --- Değişkenler ---
-SCRIPT_VERSION="v5.3"
+SCRIPT_VERSION="v5.4"
 REPO="MematiBas42/MHRS-OtomatikRandevu"
 INSTALL_DIR="$HOME/mhrs_randevu"
 LAUNCHER_DIR="$HOME/.local/bin"
@@ -69,6 +69,7 @@ cd \"$INSTALL_DIR\"
             launcher_content="#!/bin/sh
 # Bu betik 'install.sh' tarafından otomatik olarak oluşturulmuştur.
 export COMPlus_GCServer=0
+export COMPlus_GCHeapHardLimit=0x10000000 # 256MB Heap Limiti
 cd \"$INSTALL_DIR\"
 ./MHRS-OtomatikRandevu \"$@\""
             ;; 
@@ -192,8 +193,9 @@ perform_install_or_update() {
     
     # Run the launcher, applying platform-specific fixes for the first run
     if [[ "$platform_identifier" == "alpine-"* ]]; then
-        echo_info "Alpine için GC Düzeltmesi uygulanıyor..."
+        echo_info "Alpine için GC Düzeltmeleri uygulanıyor..."
         export COMPlus_GCServer=0
+        export COMPlus_GCHeapHardLimit=0x10000000
     fi
     $LAUNCHER_PATH
 }
