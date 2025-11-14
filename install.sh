@@ -1,13 +1,13 @@
 #!/bin/bash
 
-# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v7.4 - Sudo Optimizasyonu)
-# Bu sürüm, Termux ve diğer Linux sistemleri için farklı kurulum mantıkları kullanır ve root kullanıcısı için sudo kullanımını optimize eder.
+# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v7.5 - Sözdizim Düzeltmesi)
+# Bu sürüm, platforma özel bağımlılık kurulumunu geri getirir ve kurulum dizininin varlığını garantiler.
 
 set -e
 set -o pipefail
 
 # --- Değişkenler ---
-SCRIPT_VERSION="v7.4"
+SCRIPT_VERSION="v7.5"
 REPO="MematiBas42/MHRS-OtomatikRandevu"
 INSTALL_DIR="$HOME/mhrs_randevu"
 LATEST_RELEASE_URL="https://api.github.com/repos/$REPO/releases/latest"
@@ -50,7 +50,7 @@ get_latest_remote_version() {
 
     if [ -z "$tag_name" ]; then
         echo_error "HATA: Alınan yanıttan sürüm (tag_name) bilgisi ayıklanamadı."
-        echo ">>> API Yanıtı (ilk 5 satır):" >&2
+        echo "--> API Yanıtı (ilk 5 satır):" >&2
         echo "$api_output" | head -n 5 >&2
         echo "" && return
     fi
@@ -71,24 +71,27 @@ create_launcher() {
 dotnet $APP_DLL \"\$@\""
             
             echo_info "--> Termux için başlatıcı '$LAUNCHER_PATH' adresine kuruluyor..."
-            
             mkdir -p "$LAUNCHER_DIR"
             echo -e "$launcher_content" > "$LAUNCHER_PATH"
             chmod +x "$LAUNCHER_PATH"
-
             echo_success "✓ Başlatıcı betik '$LAUNCHER_PATH' adresine başarıyla kuruldu."
             ;; 
         
         *) # Alpine ve diğer tüm Linux varyantları için standart metot
             local LAUNCHER_DIR="/usr/local/bin"
             local LAUNCHER_PATH="$LAUNCHER_DIR/mhrs"
+            local SUDO_CMD=""
             
-            echo_info "--> Başlatıcı '$LAUNCHER_PATH' adresine kuruluyor (root yetkisi gerekebilir).\n"
-
-            if ! command -v sudo >/dev/null 2>&1 && [ "$(id -u)" -ne 0 ]; then
-                echo_error "HATA: Bu betiğin başlatıcıyı kurması için 'root' yetkisi veya 'sudo' komutu gereklidir."
-                exit 1
+            if [ "$(id -u)" -ne 0 ]; then
+                if command -v sudo >/dev/null 2>&1; then
+                    SUDO_CMD="sudo"
+                else
+                    echo_error "HATA: Bu betiğin başlatıcıyı kurması için 'root' yetkisi veya 'sudo' komutu gereklidir."
+                    exit 1
+                fi
             fi
+            
+            echo_info "--> Başlatıcı '$LAUNCHER_PATH' adresine kuruluyor (yetki: ${SUDO_CMD:-'root olarak'})..."
             
             local launcher_content=""
             case "$platform_identifier" in
@@ -101,9 +104,9 @@ dotnet $APP_DLL \"\$@\""
             temp_launcher=$(mktemp)
             echo -e "$launcher_content" > "$temp_launcher"
             
-            sudo mkdir -p "$LAUNCHER_DIR"
-            sudo mv "$temp_launcher" "$LAUNCHER_PATH"
-            sudo chmod +x "$LAUNCHER_PATH"
+            $SUDO_CMD mkdir -p "$LAUNCHER_DIR"
+            $SUDO_CMD mv "$temp_launcher" "$LAUNCHER_PATH"
+            $SUDO_CMD chmod +x "$LAUNCHER_PATH"
             
             echo_success "✓ Başlatıcı betik '$LAUNCHER_PATH' adresine başarıyla kuruldu."
             echo_success "✓ 'mhrs' komutu artık sistem genelinde kullanılabilir olmalı."
@@ -199,11 +202,7 @@ main() {
     
     if [ -d "/data/data/com.termux" ]; then
         echo_info "Termux ortamı algılandı."
-        echo_info "Gerekli Termux paketleri kontrol ediliyor/güncelleniyor..."
-        pkg update -y -o Dpkg::Options::=\"--force-confold\"
-        pkg upgrade -y -o Dpkg::Options::=\"--force-confold\"
-        pkg install -y dotnet-sdk-8.0
-        echo_success "✓ .NET 8 SDK ve Termux paketleri kontrol edildi."
+        echo_warn "Termux üzerindeki bağımlılık kontrolü (dotnet-sdk-8.0) şu anda devre dışıdır ve manuel kurulum gerektirebilir."
         perform_install_or_update "termux-arm64" "MHRS-OtomatikRandevu-termux-arm64.zip"
 
     elif [ -f "/etc/alpine-release" ]; then
