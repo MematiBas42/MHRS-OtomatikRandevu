@@ -79,7 +79,7 @@ namespace MHRS_OtomatikRandevu
 
     public class Program
     {
-    	    static string version = "v1.0.9";        static string? TC_NO;
+    	    static string version = "v2.0.0";        static string? TC_NO;
         static string? SIFRE;
 
         static string? JWT_TOKEN;
@@ -330,6 +330,9 @@ namespace MHRS_OtomatikRandevu
                 _client.AddOrUpdateAuthorizationHeader(JWT_TOKEN);
             }
             #endregion
+
+            Console.WriteLine("\nKontroller tamamlandı. Seçim ekranına geçmek için ENTER tuşuna basın...");
+            Console.ReadLine();
 
             List<SearchCombination> searchCombinations = new List<SearchCombination> { new SearchCombination() };
             List<SearchCombination> nextTierCombinations;

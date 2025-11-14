@@ -152,6 +152,9 @@ perform_install_or_update() {
     # Her kurulum/güncellemede başlatıcıyı oluştur/güncelle
     create_launcher "$platform_type"
 
+    echo_info "Kurulum tamamlandı. Uygulamayı başlatmak için ENTER tuşuna basın..."
+    read -r
+
     # Uygulamayı doğrudan çalıştırma (sadece bu betik üzerinden çalıştırıldığında)
     echo_info "Kurulum sonrası ilk çalıştırma yapılıyor..."
     cd "$INSTALL_DIR"
