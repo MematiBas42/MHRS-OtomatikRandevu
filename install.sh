@@ -1,13 +1,13 @@
 #!/bin/bash
 
-# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v7.1 - Standart Dizin Kurulumu)
-# Bu sürüm, kısayolu /usr/local/bin altına kurarak PATH sorunlarını tamamen ortadan kaldırır.
+# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v7.2 - Platform Farkındalığı)
+# Bu sürüm, Termux ve diğer Linux sistemleri için farklı kurulum mantıkları kullanır.
 
 set -e
 set -o pipefail
 
 # --- Değişkenler ---
-SCRIPT_VERSION="v7.1"
+SCRIPT_VERSION="v7.2"
 REPO="MematiBas42/MHRS-OtomatikRandevu"
 INSTALL_DIR="$HOME/mhrs_randevu"
 LATEST_RELEASE_URL="https://api.github.com/repos/$REPO/releases/latest"
@@ -27,8 +27,7 @@ TOKEN_PATTERN="token_*.txt"
 
 check_common_deps() {
     echo_info "\n--- Aşama 1: Temel Araçlar Kontrol Ediliyor ---"
-    # sudo is now a mandatory dependency for installing the launcher
-    for dep in curl grep cut sed unzip sudo; do
+    for dep in curl grep cut sed unzip; do
         if ! command -v "$dep" >/dev/null 2>&1; then
             echo_error "HATA: Gerekli araç '$dep' bulunamadı. Lütfen kurup tekrar deneyin."
             exit 1
@@ -51,7 +50,7 @@ get_latest_remote_version() {
 
     if [ -z "$tag_name" ]; then
         echo_error "HATA: Alınan yanıttan sürüm (tag_name) bilgisi ayıklanamadı."
-        echo "--> API Yanıtı (ilk 5 satır):" >&2
+        echo ">>> API Yanıtı (ilk 5 satır):" >&2
         echo "$api_output" | head -n 5 >&2
         echo "" && return
     fi
@@ -61,32 +60,56 @@ get_latest_remote_version() {
 
 create_launcher() {
     local platform_identifier="$1"
-    local launcher_content
-    local LAUNCHER_DIR="/usr/local/bin"
-    local LAUNCHER_PATH="$LAUNCHER_DIR/mhrs"
-
-    echo_info "\n--- Aşama 4: 'mhrs' Komutu Standart Dizine Kuruluyor ---"
     
+    local launcher_content_alpine="#!/bin/sh\nexport COMPlus_GCServer=0\nexport COMPlus_GCHeapHardLimit=0x10000000\ncd \"$INSTALL_DIR\"\n./MHRS-OtomatikRandevu \"\$@\""
+    local launcher_content_termux="#!/bin/bash\ncd \"$INSTALL_DIR\"\ndotnet $APP_DLL \"\$@\""
+    local launcher_content_win="#!/bin/bash\ncd \"$INSTALL_DIR\"\n./MHRS-OtomatikRandevu.exe \"\$@\""
+    local launcher_content_std_linux="#!/bin/bash\ncd \"$INSTALL_DIR\"\n./MHRS-OtomatikRandevu \"\$@\""
+
+    echo_info "\n--- Aşama 4: 'mhrs' Komutu Yapılandırılıyor ---"
+
     case "$platform_identifier" in
-        termux-*) launcher_content="#!/bin/bash\ncd \"$INSTALL_DIR\"\ndotnet $APP_DLL \"\$@\"" ;; 
-        win-*) launcher_content="#!/bin/bash\ncd \"$INSTALL_DIR\"\n./MHRS-OtomatikRandevu.exe \"\$@\"" ;; 
-        alpine-*) launcher_content="#!/bin/sh\nexport COMPlus_GCServer=0\nexport COMPlus_GCHeapHardLimit=0x10000000\ncd \"$INSTALL_DIR\"\n./MHRS-OtomatikRandevu \"\$@\"" ;; 
-        *) launcher_content="#!/bin/bash\ncd \"$INSTALL_DIR\"\n./MHRS-OtomatikRandevu \"\$@\"" ;; 
-    esac
+        termux-*) 
+            local LAUNCHER_DIR="$PREFIX/bin"
+            local LAUNCHER_PATH="$LAUNCHER_DIR/mhrs"
+            echo_info ">>> Termux için başlatıcı '$LAUNCHER_PATH' adresine kuruluyor..."
+            
+            mkdir -p "$LAUNCHER_DIR"
+            echo -e "$launcher_content_termux" > "$LAUNCHER_PATH"
+            chmod +x "$LAUNCHER_PATH"
 
-    local temp_launcher
-    temp_launcher=$(mktemp)
-    echo -e "$launcher_content" > "$temp_launcher"
-    
-    echo_info "--> Başlatıcı betik '$LAUNCHER_PATH' adresine kopyalanıyor (root yetkisi gerekebilir)..."
-    
-    # Use sudo to move the file and set permissions.
-    # This works for both root users (sudo does nothing) and non-root users with sudo rights.
-    sudo mv "$temp_launcher" "$LAUNCHER_PATH"
-    sudo chmod +x "$LAUNCHER_PATH"
-    
-    echo_success "✓ Başlatıcı betik '$LAUNCHER_PATH' adresine başarıyla kuruldu."
-    echo_success "✓ 'mhrs' komutu artık sistem genelinde kullanılabilir olmalı."
+            echo_success "✓ Başlatıcı betik '$LAUNCHER_PATH' adresine başarıyla kuruldu."
+            ;;
+        
+        *) # Alpine ve diğer tüm Linux varyantları için standart metot
+            local LAUNCHER_DIR="/usr/local/bin"
+            local LAUNCHER_PATH="$LAUNCHER_DIR/mhrs"
+            
+            echo_info ">>> Başlatıcı '$LAUNCHER_PATH' adresine kuruluyor (root yetkisi gerekebilir)..."
+
+            if ! command -v sudo >/dev/null 2>&1 && [ "$(id -u)" -ne 0 ]; then
+                echo_error "HATA: Bu betiğin başlatıcıyı kurması için 'root' yetkisi veya 'sudo' komutu gereklidir."
+                exit 1
+            fi
+            
+            local launcher_content=""
+            case "$platform_identifier" in
+                alpine-*) launcher_content=$launcher_content_alpine ;; 
+                win-*) launcher_content=$launcher_content_win ;; 
+                *) launcher_content=$launcher_content_std_linux ;; 
+            esac
+
+            local temp_launcher
+            temp_launcher=$(mktemp)
+            echo -e "$launcher_content" > "$temp_launcher"
+            
+            sudo mv "$temp_launcher" "$LAUNCHER_PATH"
+            sudo chmod +x "$LAUNCHER_PATH"
+            
+            echo_success "✓ Başlatıcı betik '$LAUNCHER_PATH' adresine başarıyla kuruldu."
+            echo_success "✓ 'mhrs' komutu artık sistem genelinde kullanılabilir olmalı."
+            ;;
+    esac
 }
 
 perform_install_or_update() {
@@ -175,19 +198,18 @@ main() {
     OS_TYPE=$(uname -s)
     ARCH_TYPE=$(uname -m)
     
-    # Platform detection logic can be simplified now as we don't need shell-specific PATH logic
-    if [ -f "/etc/alpine-release" ]; then
+    if [ -d "/data/data/com.termux" ]; then
+        echo_info "Termux ortamı algılandı."
+        echo_warn "Termux üzerindeki bağımlılık kontrolü (dotnet-sdk-8.0) şu anda devre dışıdır ve manuel kurulum gerektirebilir."
+        perform_install_or_update "termux-arm64" "MHRS-OtomatikRandevu-termux-arm64.zip"
+    elif [ -f "/etc/alpine-release" ]; then
         echo_info "Alpine Linux ortamı algılandı."
-         if [ "$ARCH_TYPE" = "aarch64" ]; then
+        if [ "$ARCH_TYPE" = "aarch64" ]; then
              perform_install_or_update "alpine-arm64" "MHRS-OtomatikRandevu-alpine-arm64.zip"
         else
             echo_error "Desteklenmeyen Alpine Mimarisi: $ARCH_TYPE"
             exit 1
         fi
-    elif [ -d "/data/data/com.termux" ]; then
-        echo_info "Termux ortamı algılandı."
-        echo_warn "Termux üzerindeki bağımlılık kontrolü (dotnet-sdk-8.0) şu anda devre dışıdır ve manuel kurulum gerektirebilir."
-        perform_install_or_update "termux-arm64" "MHRS-OtomatikRandevu-termux-arm64.zip"
     elif [ "$OS_TYPE" = "Linux" ]; then
         echo_info "Genel Linux ortamı algılandı."
          if [ "$ARCH_TYPE" = "x86_64" ]; then
