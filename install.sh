@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v6.3 - Nihai Kararlı Sürüm)
+# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v6.5 - Nihai Kararlı Sürüm)
 # Platformu ve mimariyi algılar, bağımlılıkları kurar, en son sürümü indirir,
 # ayarları korur ve evrensel bir başlatıcı betik ile PATH ayarını otomatik yapar.
 
@@ -8,7 +8,7 @@ set -e
 set -o pipefail
 
 # --- Değişkenler ---
-SCRIPT_VERSION="v6.3"
+SCRIPT_VERSION="v6.5"
 REPO="MematiBas42/MHRS-OtomatikRandevu"
 INSTALL_DIR="$HOME/mhrs_randevu"
 LAUNCHER_DIR="$HOME/.local/bin"
@@ -16,9 +16,10 @@ LAUNCHER_PATH="$LAUNCHER_DIR/mhrs"
 LATEST_RELEASE_URL="https://api.github.com/repos/$REPO/releases/latest"
 APP_DLL="MHRS-OtomatikRandevu.dll"
 VERSION_FILE="$INSTALL_DIR/version.txt"
+PATH_COMMENT="# MHRS Otomatik Randevu için PATH ayarı"
 CONFIG_FILE="appsettings.json"
 TOKEN_PATTERN="token_*.txt"
-PATH_COMMENT="# MHRS Otomatik Randevu için PATH ayarı"
+
 
 # --- Renkler ve Yardımcı Fonksiyonlar ---
  echo_info() { echo -e "\033[1;34m$1\033[0m"; }
@@ -62,7 +63,7 @@ get_latest_remote_version() {
 }
 
 cleanup_rc_files() {
-    local files_to_clean=("$@")
+    local files_to_clean=($@)
     echo_info "--> Eski MHRS PATH girdileri temizleniyor..."
     for rc_file in "${files_to_clean[@]}"; do
         if [ -f "$rc_file" ]; then
@@ -70,7 +71,7 @@ cleanup_rc_files() {
             sed -i -e "/$PATH_COMMENT/{N;d;}" "$rc_file"
             # Remove any remaining broken lines from old versions
             sed -i -e "/mhrs_randevu/d" "$rc_file"
-            sed -i -e "/".local\/bin/d" "$rc_file"
+            sed -i -e "/".local"/bin/d" "$rc_file"
         fi
     done
 }
@@ -110,7 +111,7 @@ create_launcher() {
         shell_name="ash"
     fi
 
-    local files_to_try=()
+        local files_to_try=()
     if [ "$shell_name" = "bash" ]; then
         files_to_try=("$HOME/.bashrc")
     elif [ "$shell_name" = "zsh" ]; then
@@ -123,8 +124,8 @@ create_launcher() {
         cleanup_rc_files "${files_to_try[@]}"
 
         echo_info "--> PATH ayarları şu dosyalara yazılıyor: ${files_to_try[*]}"
-        local export_line="export PATH=\"
-$HOME/.local/bin:$PATH\""
+        local export_line="export PATH=\
+$HOME/.local/bin:$PATH"
         
         for rc_file in "${files_to_try[@]}"; do
             echo "" >> "$rc_file"
@@ -242,6 +243,7 @@ main() {
     
     if [ -d "/data/data/com.termux" ]; then
         echo_info "Termux ortamı algılandı."
+        echo_warn "Termux üzerindeki bağımlılık kontrolü (dotnet-sdk-8.0) şu anda devre dışıdır ve manuel kurulum gerektirebilir."
         perform_install_or_update "termux-arm64" "MHRS-OtomatikRandevu-termux-arm64.zip"
     elif [ -f "/etc/alpine-release" ]; then
         echo_info "Alpine Linux ortamı algılandı."
