@@ -287,9 +287,9 @@ namespace MHRS_OtomatikRandevu
             {
                 Console.WriteLine("\nUYARI: Telegram API Token veya Chat ID bilgisi appsettings.json dosyasında eksik. Bildirimler gönderilemeyecek.");
                 Console.WriteLine("-----------------------------------------------------------------");
-                Console.WriteLine("Bilgileri Nasıl Alınır?");
-                Console.WriteLine("1. Telegram'da 'BotFather' adlı bota gidin, '/newbot' komutuyla yeni bir bot oluşturun ve size verdiği API Token'ı kopyalayın.");
-                Console.WriteLine("2. Telegram'da 'RawDataBot' veya 'userinfobot' adlı bota gidin, '/start' komutunu çalıştırın ve size verdiği 'Id' (Chat ID) numarasını kopyalayın.");
+                Console.WriteLine("Bilgiler Nasıl Alınır?");
+                Console.WriteLine("1. Telegram'da '@BotFather' adlı bota gidin, '/newbot' komutuyla yeni bir bot oluşturun ve size verdiği API Token'ı kopyalayın. ⚠️!!! DİKKAT !!! BOTLAR, İLK MESAJI ATAMAZ!! BOTUNUZA İLK MESAJI SİZ ATIN YOKSA BİLDİRİM MESAJI GELMEZ!!!");
+                Console.WriteLine("2. Telegram'da '@raw_info_bot' veya '@userinfobot' adlı bota gidin, '/start' komutunu çalıştırın ve size verdiği 'Id' (Chat ID) numarasını kopyalayın.");
                 Console.WriteLine("-----------------------------------------------------------------");
                 Console.WriteLine("Atlamak için ENTER'a, bilgileri şimdi girmek için SPACE (BOŞLUK) tuşuna basın.");
 
@@ -1393,13 +1393,13 @@ namespace MHRS_OtomatikRandevu
                     string notificationMessage = $"✅ RANDEVU BULUNDU! ✅\n\n" + detay;
 
                     await _notificationService.SendNotification(notificationMessage);
-                    Console.WriteLine("Telegram bildirimi gönderildi.");
+                    //Console.WriteLine("Telegram bildirimi gönderildi.");
                     Logger.Info("Telegram bildirimi başarıyla gönderildi.");
                 }
                 catch (Exception ex)
                 {
                     Logger.Error("Telegram bildirimi gönderilirken beklenmedik bir hata oluştu.", ex);
-                    Console.WriteLine("Telegram bildirimi gönderilemedi. Devam etmek için ENTER tuşuna basın...");
+                    Console.WriteLine("Devam etmek için ENTER tuşuna basın...");
                     Console.ReadLine();
                 }
             }
@@ -1475,7 +1475,7 @@ namespace MHRS_OtomatikRandevu
             }
             else
             {
-                Logger.WriteLineAndLog("Oturum kapatılmadı, token dosyası bir sonraki otomatik giriş için saklandı.");
+                Logger.WriteLineAndLog("Oturum kapatılmadı, token saklandı.");
             }
 
             Logger.Info("================ UYGULAMA KULLANICI TARAFINDAN SONLANDIRILDI ================");
