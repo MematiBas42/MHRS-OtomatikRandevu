@@ -1,13 +1,13 @@
 #!/bin/bash
 
-# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v7.6 - Nihai Stabil Sürüm)
+# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v7.7 - Nihai Sözdizim Düzeltmesi)
 # Bu sürüm, Termux için bağımlılık kurulumunu geri getirir ve tüm platformlar için stabilite sağlar.
 
 set -e
 set -o pipefail
 
 # --- Değişkenler ---
-SCRIPT_VERSION="v7.6"
+SCRIPT_VERSION="v7.7"
 REPO="MematiBas42/MHRS-OtomatikRandevu"
 INSTALL_DIR="$HOME/mhrs_randevu"
 LATEST_RELEASE_URL="https://api.github.com/repos/$REPO/releases/latest"
@@ -95,9 +95,12 @@ dotnet $APP_DLL \"\$@\""
             
             local launcher_content=""
             case "$platform_identifier" in
-                alpine-*) launcher_content="#!/bin/sh\nexport COMPlus_GCServer=0\nexport COMPlus_GCHeapHardLimit=0x10000000\ncd \"$INSTALL_DIR\"\n./MHRS-OtomatikRandevu \"\$@\"" ;; 
-                win-*) launcher_content="#!/bin/bash\ncd \"$INSTALL_DIR\"\n./MHRS-OtomatikRandevu.exe \"\$@\"" ;; 
-                *) launcher_content="#!/bin/bash\ncd \"$INSTALL_DIR\"\n./MHRS-OtomatikRandevu \"\$@\"" ;; 
+                alpine-*) launcher_content="#!/bin/sh\nexport COMPlus_GCServer=0\nexport COMPlus_GCHeapHardLimit=0x10000000\ncd \"$INSTALL_DIR\"
+./MHRS-OtomatikRandevu \"\$@\"" ;; 
+                win-*) launcher_content="#!/bin/bash\ncd \"$INSTALL_DIR\"
+./MHRS-OtomatikRandevu.exe \"\$@\"" ;; 
+                *) launcher_content="#!/bin/bash\ncd \"$INSTALL_DIR\"
+./MHRS-OtomatikRandevu \"\$@\"" ;; 
             esac
 
             local temp_launcher
