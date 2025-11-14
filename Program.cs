@@ -1338,7 +1338,8 @@ namespace MHRS_OtomatikRandevu
                 catch (Exception ex)
                 {
                     Logger.Error("Telegram bildirimi gönderilirken beklenmedik bir hata oluştu.", ex);
-                    Console.WriteLine("Telegram bildirimi gönderilemedi.");
+                    Console.WriteLine("Telegram bildirimi gönderilemedi. Devam etmek için ENTER tuşuna basın...");
+                    Console.ReadLine();
                 }
             }
 
