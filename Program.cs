@@ -250,6 +250,22 @@ namespace MHRS_OtomatikRandevu
 
         static async Task Main(string[] args)
         {
+            var firstRunFlagPath = Path.Combine(AppContext.BaseDirectory, ".mhrs_ack");
+            if (!File.Exists(firstRunFlagPath))
+            {
+                Console.Clear();
+                Console.WriteLine("--- YASAL UYARI VE ÖNEMLİ BİLGİLENDİRME ---");
+                Console.WriteLine("\n1. Bu program test amaçlı geliştirilmiştir. Programın kullanımından doğabilecek tüm sorumluluk kullanıcıya aittir.");
+                Console.WriteLine("\n2. Lütfen MHRS kurallarını unutmayın:");
+                Console.WriteLine("   - Randevunuza gitmeyecekseniz, en geç randevu gününden bir gün önce saat 20:00'a kadar iptal etmelisiniz.");
+                Console.WriteLine("   - Randevusunu onayladığı halde gitmeyen veya zamanında iptal etmeyen kişilerin, aynı branş için 15 GÜN boyunca yeni randevu alması kısıtlanacaktır.");
+                Console.WriteLine("   - Bu programın bulduğu randevular için de aynı kurallar geçerlidir.");
+                Console.WriteLine("\nBu bilgilendirmeyi okuyup anladığınızı onaylamak için lütfen ENTER tuşuna basın...");
+                Console.ReadLine();
+                File.Create(firstRunFlagPath).Close();
+                Console.Clear();
+            }
+
             Console.CancelKeyPress += (sender, e) => {
                 e.Cancel = true;
                 Logger.IsExiting = true;
