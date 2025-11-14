@@ -1,13 +1,13 @@
 #!/bin/bash
 
-# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v7.8 - Nihai Sözdizim Düzeltmesi)
+# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v7.9 - Termux Düzeltmesi)
 # Bu sürüm, Termux için bağımlılık kurulumunu geri getirir ve tüm platformlar için stabilite sağlar.
 
 set -e
 set -o pipefail
 
 # --- Değişkenler ---
-SCRIPT_VERSION="v7.8"
+SCRIPT_VERSION="v7.9"
 REPO="MematiBas42/MHRS-OtomatikRandevu"
 INSTALL_DIR="$HOME/mhrs_randevu"
 LATEST_RELEASE_URL="https://api.github.com/repos/$REPO/releases/latest"
