@@ -162,7 +162,7 @@ perform_install_or_update() {
     fi
     mkdir -p "$INSTALL_DIR"
 
-    DOWNLOAD_URL=$(curl -sL "$LATEST_RELEASE_URL" | grep 'browser_download_url.*$asset_zip_name' | cut -d '"' -f 4 || true)
+    DOWNLOAD_URL=$(curl -sL "$LATEST_RELEASE_URL" | grep '"browser_download_url":' | grep "$asset_zip_name" | cut -d '"' -f 4 || true)
     if [ -z "$DOWNLOAD_URL" ]; then
         echo_error "HATA: '$asset_zip_name' için indirme URL'si bulunamadı."
         exit 1
