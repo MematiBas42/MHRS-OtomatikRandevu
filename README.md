@@ -36,13 +36,16 @@ Uygulama, interaktif bir şekilde sizden İl, İlçe, Klinik, Hastane gibi bilgi
 
 ---
 
-### 🐧 Linux & 📱 Termux (Tek Komutla Kurulum)
+### 🐧 Linux  &  📱 [ReTerminal](https://github.com/RohitKushvaha01/ReTerminal) (öneriliyor!!) / Termux 
 
+🎯 Tek Komutla Kurulum 
 Aşağıdaki komutu terminalinize yapıştırıp çalıştırın. Bu betik, sizin için en son sürümü indirip kuracak ve uygulamayı başlatacaktır.
 
 ```bash
 bash <(curl -sSL https://raw.githubusercontent.com/MematiBas42/MHRS-OtomatikRandevu/master/install.sh)
 ```
+
+Betiği, [ReTerminal](https://github.com/RohitKushvaha01/ReTerminal/releases/latest) Alpine ortamında kullanmak için önce curl paketini kurmalısınız. " apk add curl " komutu ile kurduktan sonra betiği çalıştırın. 
 
 **Kurulum Betiğinin Özellikleri:**
 -   **Akıllı Güncelleme:** Betiği her çalıştırdığınızda, yeni bir sürüm varsa `appsettings.json` ve oturum bilgilerinizi koruyarak uygulamayı günceller.
