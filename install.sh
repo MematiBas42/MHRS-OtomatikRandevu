@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v5.4 - Gelişmiş Alpine Düzeltmeleri)
+# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v5.5 - Gelişmiş Ortam Düzeltmeleri)
 # Platformu ve mimariyi algılar, bağımlılıkları kurar, en son sürümü indirir,
 # ayarları korur ve evrensel bir başlatıcı betik ile PATH ayarını otomatik yapar.
 
@@ -8,7 +8,7 @@ set -e
 set -o pipefail
 
 # --- Değişkenler ---
-SCRIPT_VERSION="v5.4"
+SCRIPT_VERSION="v5.5"
 REPO="MematiBas42/MHRS-OtomatikRandevu"
 INSTALL_DIR="$HOME/mhrs_randevu"
 LAUNCHER_DIR="$HOME/.local/bin"
@@ -51,47 +51,41 @@ create_launcher() {
 
     case "$platform_identifier" in
         termux-*) 
-            # Framework-dependent
             launcher_content="#!/bin/bash
 # Bu betik 'install.sh' tarafından otomatik olarak oluşturulmuştur.
 cd \"$INSTALL_DIR\"
 dotnet $APP_DLL \"$@\""
-            ;; 
+            ;;
         win-*) 
-            # Self-contained Windows
             launcher_content="#!/bin/bash
 # Bu betik 'install.sh' tarafından otomatik olarak oluşturulmuştur.
 cd \"$INSTALL_DIR\"
 ./MHRS-OtomatikRandevu.exe \"$@\""
-            ;; 
+            ;;
         alpine-*) 
-            # Self-contained Alpine with GC fix
             launcher_content="#!/bin/sh
 # Bu betik 'install.sh' tarafından otomatik olarak oluşturulmuştur.
 export COMPlus_GCServer=0
 export COMPlus_GCHeapHardLimit=0x10000000 # 256MB Heap Limiti
 cd \"$INSTALL_DIR\"
 ./MHRS-OtomatikRandevu \"$@\""
-            ;; 
+            ;;
         *) 
-            # Self-contained Linux variants
             launcher_content="#!/bin/bash
 # Bu betik 'install.sh' tarafından otomatik olarak oluşturulmuştur.
 cd \"$INSTALL_DIR\"
 ./MHRS-OtomatikRandevu \"$@\""
-            ;; 
+            ;;
     esac
 
-    # Betiği oluştur ve çalıştırılabilir yap
     echo "$launcher_content" > "$LAUNCHER_PATH"
     chmod +x "$LAUNCHER_PATH"
     echo_success "✓ Başlatıcı betik '$LAUNCHER_PATH' adresinde oluşturuldu."
 
-    # PATH kontrolü yap ve gerekirse otomatik ekle
     case ":$PATH:" in
         *":$LAUNCHER_DIR:"*) 
             echo_success "✓ '$LAUNCHER_DIR' dizini PATH içinde zaten mevcut."
-            ;; 
+            ;;
         *)
             echo_warn "UYARI: '$LAUNCHER_DIR' dizini PATH değişkeninizde bulunmuyor."
             
@@ -113,15 +107,17 @@ cd \"$INSTALL_DIR\"
                     echo "" >> "$shell_rc_file"
                     echo "# MHRS Otomatik Randevu için PATH ayarı" >> "$shell_rc_file"
                     echo "$export_line" >> "$shell_rc_file"
-                    echo_success "✓ PATH ayarı eklendi."
-                    echo_warn "Değişikliğin etkinleşmesi için terminalinizi yeniden başlatmanız veya 'source $shell_rc_file' komutunu çalıştırmanız gerekmektedir."
-                else
-                    echo_info "PATH ayarı '$shell_rc_file' içinde zaten mevcut."
+                fi
+                echo_success "✓ PATH ayarı '$shell_rc_file' dosyasına yazıldı."
+                echo_warn "Değişikliğin etkinleşmesi için terminali yeniden başlatmanız gerekebilir."
+                if [ "$shell_name" = "ash" ] || [ "$shell_name" = "sh" ]; then
+                    echo_warn "EĞER 'mhrs' komutu yeniden başlatma sonrası çalışmazsa, aşağıdaki komutu deneyin:"
+                    echo_info "  echo 'source $$HOME/.profile' >> $$HOME/.ashrc"
                 fi
             else
                 echo_error "Desteklenmeyen kabuk ($shell_name). Lütfen '$LAUNCHER_DIR' dizinini manuel olarak PATH'inize ekleyin."
             fi
-            ;; 
+            ;;
     esac
 }
 
@@ -142,17 +138,15 @@ perform_install_or_update() {
     else
         local_version=$(cat "$VERSION_FILE")
         if [ "$local_version" = "$remote_version" ]; then
-            echo_success "✓ Uygulama zaten güncel (Sürüm: ${local_version}). Kurulum adımı atlanıyor."
+            echo_success "✓ Uygulama zaten güncel (Sürüm: ${local_version})."
             create_launcher "$platform_identifier"
-            # Proceed to the end of the function to run the app
         else
             echo_info "Yeni sürüm bulundu: $remote_version. İndiriliyor..."
 
-            local temp_backup_dir
-            temp_backup_dir=$(mktemp -d)
+            local temp_backup_dir=$(mktemp -d)
 
             if [ -d "$INSTALL_DIR" ]; then
-                echo_info "Eski ayarlar ve token dosyaları yedekleniyor..."
+                echo_info "Eski ayarlar yedekleniyor..."
                 find "$INSTALL_DIR" -name "$CONFIG_FILE" -exec cp {} "$temp_backup_dir/" \;
                 find "$INSTALL_DIR" -name "$TOKEN_PATTERN" -exec cp {} "$temp_backup_dir/" \;
                 rm -rf "$INSTALL_DIR"
@@ -168,12 +162,12 @@ perform_install_or_update() {
             echo_info "Uygulama dosyaları indiriliyor..."
             curl -L -o "$INSTALL_DIR/$asset_zip_name" "$DOWNLOAD_URL"
 
-            echo_info "Dosyalar arşivden (sessiz modda) çıkarılıyor..."
+            echo_info "Dosyalar arşivden çıkarılıyor..."
             unzip -oq "$INSTALL_DIR/$asset_zip_name" -d "$INSTALL_DIR"
             rm "$INSTALL_DIR/$asset_zip_name"
 
             if [ -d "$temp_backup_dir" ] && [ "$(ls -A "$temp_backup_dir")" ]; then
-                echo_info "Eski ayarlar ve token dosyaları geri yükleniyor..."
+                echo_info "Eski ayarlar geri yükleniyor..."
                 find "$temp_backup_dir" -name "$CONFIG_FILE" -exec mv {} "$INSTALL_DIR/" \;
                 find "$temp_backup_dir" -name "$TOKEN_PATTERN" -exec mv {} "$INSTALL_DIR/" \;
             fi
@@ -191,13 +185,13 @@ perform_install_or_update() {
     echo_info "\nUygulamayı şimdi başlatmak için ENTER tuşuna basın..."
     read -r
     
-    # Run the launcher, applying platform-specific fixes for the first run
+    echo_info "Uygulama başlatılıyor..."
     if [[ "$platform_identifier" == "alpine-"* ]]; then
-        echo_info "Alpine için GC Düzeltmeleri uygulanıyor..."
-        export COMPlus_GCServer=0
-        export COMPlus_GCHeapHardLimit=0x10000000
+        echo_info "(Alpine için GC bellek düzeltmeleri uygulanıyor...)"
+        COMPlus_GCServer=0 COMPlus_GCHeapHardLimit=0x10000000 $LAUNCHER_PATH
+    else
+        $LAUNCHER_PATH
     fi
-    $LAUNCHER_PATH
 }
 
 main() {
@@ -208,7 +202,6 @@ main() {
     OS_TYPE=$(uname -s)
     ARCH_TYPE=$(uname -m)
     
-    # 1. Termux Tespiti
     if [ -d "/data/data/com.termux" ]; then
         echo_info "Termux ortamı algılandı."
         echo_info "Gerekli Termux paketleri kontrol ediliyor/kuruluyor..."
@@ -220,7 +213,7 @@ main() {
         if [ "$ARCH_TYPE" = "aarch64" ]; then
             echo_info "Mimari: arm64"
             perform_install_or_update "termux-arm64" "MHRS-OtomatikRandevu-termux-arm64.zip"
-        elif [[ "$ARCH_TYPE" == "arm"* ]]; then # armv7l, armv8l etc.
+        elif [[ "$ARCH_TYPE" == "arm"* ]]; then
             echo_info "Mimari: arm (32-bit)"
             perform_install_or_update "termux-arm" "MHRS-OtomatikRandevu-termux-arm.zip"
         else
@@ -230,7 +223,6 @@ main() {
         return
     fi
     
-    # 2. Alpine Linux Tespiti
     if [ -f "/etc/alpine-release" ]; then
         echo_info "Alpine Linux ortamı algılandı."
         if [ "$ARCH_TYPE" = "aarch64" ]; then
@@ -249,7 +241,6 @@ main() {
         return
     fi
 
-    # 3. Genel Linux ve Windows (WSL/Git Bash) Tespiti
     case "$OS_TYPE" in
         Linux)
             echo_info "Genel Linux ortamı algılandı."
@@ -274,7 +265,7 @@ main() {
                 echo_error "Desteklenmeyen Linux Mimarisi: $ARCH_TYPE. Sadece x86_64 desteklenmektedir."
                 exit 1
             fi
-            ;; 
+            ;;
         CYGWIN*|MINGW*|MSYS*) 
             echo_info "Windows (WSL/Git Bash) ortamı algılandı."
             if [ "$ARCH_TYPE" = "x86_64" ]; then
@@ -287,11 +278,11 @@ main() {
                 echo_error "Desteklenmeyen Windows Mimarisi: $ARCH_TYPE."
                 exit 1
             fi
-            ;; 
+            ;;
         *)
             echo_error "Desteklenmeyen İşletim Sistemi: $OS_TYPE"
             exit 1
-            ;; 
+            ;;
     esac
 }
 
