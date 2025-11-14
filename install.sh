@@ -1,13 +1,13 @@
 #!/bin/bash
 
-# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v7.2 - Platform Farkındalığı)
-# Bu sürüm, Termux ve diğer Linux sistemleri için farklı kurulum mantıkları kullanır.
+# MHRS-OtomatikRandevu için Akıllı Kurulum ve Güncelleme Betiği (v7.3 - Nihai Stabil Sürüm)
+# Bu sürüm, platforma özel bağımlılık kurulumunu geri getirir ve kurulum dizininin varlığını garantiler.
 
 set -e
 set -o pipefail
 
 # --- Değişkenler ---
-SCRIPT_VERSION="v7.2"
+SCRIPT_VERSION="v7.3"
 REPO="MematiBas42/MHRS-OtomatikRandevu"
 INSTALL_DIR="$HOME/mhrs_randevu"
 LATEST_RELEASE_URL="https://api.github.com/repos/$REPO/releases/latest"
@@ -61,31 +61,29 @@ get_latest_remote_version() {
 create_launcher() {
     local platform_identifier="$1"
     
-    local launcher_content_alpine="#!/bin/sh\nexport COMPlus_GCServer=0\nexport COMPlus_GCHeapHardLimit=0x10000000\ncd \"$INSTALL_DIR\"\n./MHRS-OtomatikRandevu \"\$@\""
-    local launcher_content_termux="#!/bin/bash\ncd \"$INSTALL_DIR\"\ndotnet $APP_DLL \"\$@\""
-    local launcher_content_win="#!/bin/bash\ncd \"$INSTALL_DIR\"\n./MHRS-OtomatikRandevu.exe \"\$@\""
-    local launcher_content_std_linux="#!/bin/bash\ncd \"$INSTALL_DIR\"\n./MHRS-OtomatikRandevu \"\$@\""
-
     echo_info "\n--- Aşama 4: 'mhrs' Komutu Yapılandırılıyor ---"
 
     case "$platform_identifier" in
         termux-*) 
             local LAUNCHER_DIR="$PREFIX/bin"
             local LAUNCHER_PATH="$LAUNCHER_DIR/mhrs"
-            echo_info ">>> Termux için başlatıcı '$LAUNCHER_PATH' adresine kuruluyor..."
+            local launcher_content="#!/bin/bash\ncd \"$INSTALL_DIR\"\ndotnet $APP_DLL \"\$@\""
+            
+            echo_info "--> Termux için başlatıcı '$LAUNCHER_PATH' adresine kuruluyor..."
             
             mkdir -p "$LAUNCHER_DIR"
-            echo -e "$launcher_content_termux" > "$LAUNCHER_PATH"
+            echo -e "$launcher_content" > "$LAUNCHER_PATH"
             chmod +x "$LAUNCHER_PATH"
 
             echo_success "✓ Başlatıcı betik '$LAUNCHER_PATH' adresine başarıyla kuruldu."
-            ;;
+            ;; 
         
         *) # Alpine ve diğer tüm Linux varyantları için standart metot
             local LAUNCHER_DIR="/usr/local/bin"
             local LAUNCHER_PATH="$LAUNCHER_DIR/mhrs"
             
-            echo_info ">>> Başlatıcı '$LAUNCHER_PATH' adresine kuruluyor (root yetkisi gerekebilir)..."
+            echo_info "--> Başlatıcı '$LAUNCHER_PATH' adresine kuruluyor (root yetkisi gerekebilir)...
+"
 
             if ! command -v sudo >/dev/null 2>&1 && [ "$(id -u)" -ne 0 ]; then
                 echo_error "HATA: Bu betiğin başlatıcıyı kurması için 'root' yetkisi veya 'sudo' komutu gereklidir."
@@ -94,21 +92,22 @@ create_launcher() {
             
             local launcher_content=""
             case "$platform_identifier" in
-                alpine-*) launcher_content=$launcher_content_alpine ;; 
-                win-*) launcher_content=$launcher_content_win ;; 
-                *) launcher_content=$launcher_content_std_linux ;; 
+                alpine-*) launcher_content="#!/bin/sh\nexport COMPlus_GCServer=0\nexport COMPlus_GCHeapHardLimit=0x10000000\ncd \"$INSTALL_DIR\"\n./MHRS-OtomatikRandevu \"\$@\"" ;; 
+                win-*) launcher_content="#!/bin/bash\ncd \"$INSTALL_DIR\"\n./MHRS-OtomatikRandevu.exe \"\$@\"" ;; 
+                *) launcher_content="#!/bin/bash\ncd \"$INSTALL_DIR\"\n./MHRS-OtomatikRandevu \"\$@\"" ;; 
             esac
 
             local temp_launcher
             temp_launcher=$(mktemp)
             echo -e "$launcher_content" > "$temp_launcher"
             
+            sudo mkdir -p "$LAUNCHER_DIR"
             sudo mv "$temp_launcher" "$LAUNCHER_PATH"
             sudo chmod +x "$LAUNCHER_PATH"
             
             echo_success "✓ Başlatıcı betik '$LAUNCHER_PATH' adresine başarıyla kuruldu."
             echo_success "✓ 'mhrs' komutu artık sistem genelinde kullanılabilir olmalı."
-            ;;
+            ;; 
     esac
 }
 
@@ -140,7 +139,7 @@ perform_install_or_update() {
         read -r
         mhrs
         exit 0
-elif [ -z "$current_version" ]; then
+    elif [ -z "$current_version" ]; then
         echo_info "İlk kurulum: Sürüm $remote_version indiriliyor..."
     else
         echo_info "Yeni sürüm bulundu: $remote_version (Mevcut: $current_version). Güncelleniyor..."
@@ -200,24 +199,44 @@ main() {
     
     if [ -d "/data/data/com.termux" ]; then
         echo_info "Termux ortamı algılandı."
-        echo_warn "Termux üzerindeki bağımlılık kontrolü (dotnet-sdk-8.0) şu anda devre dışıdır ve manuel kurulum gerektirebilir."
+        echo_info "Gerekli Termux paketleri kontrol ediliyor/güncelleniyor..."
+        pkg update -y -o Dpkg::Options::=\"--force-confold\"
+        pkg upgrade -y -o Dpkg::Options::=\"--force-confold\"
+        pkg install -y dotnet-sdk-8.0
+        echo_success "✓ .NET 8 SDK ve Termux paketleri kontrol edildi."
         perform_install_or_update "termux-arm64" "MHRS-OtomatikRandevu-termux-arm64.zip"
+
     elif [ -f "/etc/alpine-release" ]; then
         echo_info "Alpine Linux ortamı algılandı."
         if [ "$ARCH_TYPE" = "aarch64" ]; then
+             echo_info "Gerekli Alpine paketleri kontrol ediliyor/kuruluyor..."
+             sudo apk add --no-cache icu-libs openssl lttng-ust
+             echo_success "✓ Gerekli Alpine bağımlılıkları kontrol edildi."
              perform_install_or_update "alpine-arm64" "MHRS-OtomatikRandevu-alpine-arm64.zip"
         else
             echo_error "Desteklenmeyen Alpine Mimarisi: $ARCH_TYPE"
             exit 1
         fi
+
     elif [ "$OS_TYPE" = "Linux" ]; then
         echo_info "Genel Linux ortamı algılandı."
          if [ "$ARCH_TYPE" = "x86_64" ]; then
+            echo_info "Gerekli sistem bağımlılıkları kontrol ediliyor..."
+            if command -v apt-get >/dev/null 2>&1; then
+                sudo apt-get update > /dev/null
+                sudo apt-get install -y libicu-dev libssl-dev > /dev/null
+            elif command -v dnf >/dev/null 2>&1; then
+                sudo dnf install -y libicu libssl-devel > /dev/null
+            elif command -v pacman >/dev/null 2>&1; then
+                (sudo pacman -S --needed --noconfirm icu openssl || echo_warn "UYARI: Bağımlılıklar kurulamadı. 'sudo pacman -Syu' ile sistemi güncelleyin.")
+            fi
+             echo_success "✓ Gerekli Linux bağımlılıkları kontrol edildi."
             perform_install_or_update "linux-x64" "MHRS-OtomatikRandevu-linux-x64.zip"
         else
             echo_error "Desteklenmeyen Linux Mimarisi: $ARCH_TYPE"
             exit 1
         fi
+
     elif [[ "$OS_TYPE" == "CYGWIN"* || "$OS_TYPE" == "MINGW"* || "$OS_TYPE" == "MSYS"* ]]; then
         echo_info "Windows (WSL/Git Bash) ortamı algılandı."
         if [ "$ARCH_TYPE" = "x86_64" ]; then
